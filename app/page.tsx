@@ -233,7 +233,7 @@ export default function TagStudio() {
         acc[tag.tag_type].push(tag);
         return acc;
       }, {});
-      const taggedSet = new Set((tagged || []).map((r: any) => r.entity_id));
+      const taggedSet = new Set<string>((tagged || []).map((r: any) => r.entity_id as string));
       setLooks(looksWithBrand);
       setFiltered(looksWithBrand);
       setBrands(b);
