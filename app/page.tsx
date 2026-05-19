@@ -56,13 +56,16 @@ export default function TagStudio() {
   const [flash, setFlash] = useState(false);
   const [loading, setLoading] = useState(true);
   const [brandFilter, setBrandFilter] = useState(() => { try { return localStorage.getItem("ts_brand") || "all"; } catch { return "all"; } });
+  const [statusFilter, setStatusFilter] = useState<string>(() => { try { return localStorage.getItem("ts_status") || "published"; } catch { return "published"; } });
+  const [untaggedOnly, setUntaggedOnly] = useState(false);
+  const [sortMode, setSortMode] = useState<"default" | "newest">(() => { try { return (localStorage.getItem("ts_sort") as any) || "default"; } catch { return "default"; } });
+  const [taggedLookIds, setTaggedLookIds] = useState<Set<string>>(new Set());
   const [jumpInput, setJumpInput] = useState("");
   const [filtered, setFiltered] = useState<any[]>([]);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("");
   const [adding, setAdding] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const [imgLoaded, setImgLoaded] = useState(false);
   const [notes, setNotes] = useState("");
   const [editingNotes, setEditingNotes] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
@@ -86,21 +89,26 @@ export default function TagStudio() {
   useEffect(() => { loadData(); }, []);
 
   useEffect(() => {
-    let f = brandFilter === "all" ? looks : looks.filter(l => l.brand_id === brandFilter);
+    let f = looks;
+    if (statusFilter !== "all") f = f.filter(l => l.status === statusFilter);
+    if (brandFilter !== "all") f = f.filter(l => l.brand_id === brandFilter);
     if (tagFilterLookIds !== null) f = f.filter(l => tagFilterLookIds.has(l.id));
+    if (untaggedOnly) f = f.filter(l => !taggedLookIds.has(l.id));
+    if (sortMode === "newest") f = [...f].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
     setFiltered(f);
     setIdx(i => Math.min(i, Math.max(0, f.length - 1)));
-  }, [brandFilter, tagFilterLookIds, looks]);
+  }, [brandFilter, statusFilter, untaggedOnly, sortMode, tagFilterLookIds, looks, taggedLookIds]);
 
   useEffect(() => { try { localStorage.setItem("ts_idx", String(idx)); } catch {} }, [idx]);
   useEffect(() => { try { localStorage.setItem("ts_brand", brandFilter); } catch {} }, [brandFilter]);
+  useEffect(() => { try { localStorage.setItem("ts_status", statusFilter); } catch {} }, [statusFilter]);
+  useEffect(() => { try { localStorage.setItem("ts_sort", sortMode); } catch {} }, [sortMode]);
 
   useEffect(() => {
     if (filtered[idx]) {
       loadTags(filtered[idx].id);
       setNotes(filtered[idx].notes || "");
       setEditingNotes(false);
-      setImgLoaded(false);
     }
   }, [idx, filtered]);
 
@@ -210,10 +218,11 @@ export default function TagStudio() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [l, b, t] = await Promise.all([
-        sb("looks?select=id,cloudinary_url,caption,brand_id,season_display,source_url,notes&order=brand_id,created_at&limit=2000"),
+      const [l, b, t, tagged] = await Promise.all([
+        sb("looks?select=id,cloudinary_url,caption,brand_id,season_display,source_url,notes,status,created_at&order=brand_id,created_at&limit=2000"),
         sb("brands?select=id,name&order=name"),
         sb("tags?select=*&order=tag_type,name"),
+        sb("entity_tags?entity_type=eq.look&source=eq.human&select=entity_id"),
       ]);
       const brandMap: Record<string,string> = {};
       b.forEach((br: any) => { brandMap[br.id] = br.name; });
@@ -224,10 +233,12 @@ export default function TagStudio() {
         acc[tag.tag_type].push(tag);
         return acc;
       }, {});
+      const taggedSet = new Set((tagged || []).map((r: any) => r.entity_id));
       setLooks(looksWithBrand);
       setFiltered(looksWithBrand);
       setBrands(b);
       setTagsByType(grouped);
+      setTaggedLookIds(taggedSet);
     } catch(e) { console.error(e); }
     setLoading(false);
   };
@@ -275,6 +286,12 @@ export default function TagStudio() {
         }
       }
       setActiveTags(next);
+      // Keep taggedLookIds in sync: if any tags remain, mark as tagged; if zero, mark as untagged
+      setTaggedLookIds(prev => {
+        const s = new Set(prev);
+        if (next.size > 0) s.add(look.id); else s.delete(look.id);
+        return s;
+      });
     } catch(e) { console.error(e); }
     setSaving(false); setFlash(true); setTimeout(() => setFlash(false), 900);
   };
@@ -390,6 +407,28 @@ export default function TagStudio() {
               </optgroup>
             ))}
           </select>
+
+          {/* Status filter */}
+          <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setIdx(0); }}
+            style={{background:"#484848",border:"1px solid #606060",color:C.text,padding:"7px 12px",fontSize:13,borderRadius:20,outline:"none",cursor:"pointer",fontFamily:"Inter,sans-serif",fontWeight:500}}>
+            <option value="published">Published</option>
+            <option value="archived">Archived</option>
+            <option value="draft">Draft</option>
+            <option value="all">All Status</option>
+          </select>
+
+          {/* Sort */}
+          <select value={sortMode} onChange={e => { setSortMode(e.target.value as any); setIdx(0); }}
+            style={{background:"#484848",border:"1px solid #606060",color:C.text,padding:"7px 12px",fontSize:13,borderRadius:20,outline:"none",cursor:"pointer",fontFamily:"Inter,sans-serif",fontWeight:500}}>
+            <option value="default">Sort: By brand</option>
+            <option value="newest">Sort: Newest first</option>
+          </select>
+
+          {/* Untagged only toggle */}
+          <button onClick={() => { setUntaggedOnly(v => !v); setIdx(0); }}
+            style={{background:untaggedOnly?C.white:"#484848",border:"1px solid #606060",color:untaggedOnly?"#212121":C.text,padding:"7px 12px",fontSize:13,borderRadius:20,cursor:"pointer",fontFamily:"Inter,sans-serif",fontWeight:untaggedOnly?600:500}}>
+            Untagged only
+          </button>
 
           <input value={jumpInput} onChange={e => setJumpInput(e.target.value)} onKeyDown={handleJump}
             placeholder="Go to #"
@@ -516,10 +555,8 @@ export default function TagStudio() {
               {look ? (
                 <>
                   <div style={{flex:1,minHeight:0,background:"#181818",position:"relative",overflow:"hidden"}}>
-                    {!imgLoaded && <div style={{position:"absolute",inset:0,background:"#181818"}}/>}
                     <img key={look.cloudinary_url} src={look.cloudinary_url} alt=""
-                      onLoad={() => setImgLoaded(true)}
-                      style={{width:"100%",height:"100%",objectFit:"contain",display:"block",opacity:imgLoaded?1:0,transition:"opacity 0.4s"}}
+                      style={{width:"100%",height:"100%",objectFit:"contain",display:"block"}}
                     />
                   </div>
 
@@ -528,6 +565,14 @@ export default function TagStudio() {
                       <div style={{display:"flex",alignItems:"baseline",gap:8}}>
                         <span style={{fontSize:15,fontWeight:600,color:C.text}}>{look.brands?.name || "—"}</span>
                         {look.season_display && <span style={{fontSize:12,color:C.muted}}>{look.season_display}</span>}
+                        {look.status && (
+                          <span style={{
+                            fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",
+                            color: look.status === "published" ? C.green : look.status === "archived" ? C.muted : "#f0a500",
+                            background: `${look.status === "published" ? C.green : look.status === "archived" ? C.muted : "#f0a500"}22`,
+                            padding:"2px 7px",borderRadius:10
+                          }}>{look.status}</span>
+                        )}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:10}}>
                         {look.source_url && (
