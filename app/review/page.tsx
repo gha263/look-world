@@ -129,7 +129,7 @@ function CreatePersonModal({ initialName, role, onSave, onClose }: any) {
       const result = await fetch(`${SUPABASE_URL}/rest/v1/people`, {
         method: "POST",
         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
-        body: JSON.stringify({ name: name.trim(), slug: slugify(name), primary_role: primaryRole, instagram_handle: ig.trim() || null }),
+        body: JSON.stringify({ name: name.trim(), slug: slugify(name), primary_role: primaryRole, instagram_url: ig.trim() || null }),
       });
       if (!result.ok) throw new Error(await result.text());
       const [created] = await result.json();
