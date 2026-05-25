@@ -1,31 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-
-const SUPABASE_URL = "https://rsslbgfbdoqxgogbuuzc.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzc2xiZ2ZiZG9xeGdvZ2J1dXpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA1NjE2NTUsImV4cCI6MjA3NjEzNzY1NX0.lBL-KUrQbT9N4ACc-CdMauvXmhtuG9_Jr7nhIhQz-g0";
-
-const sb = async (path: string, opts: any = {}) => {
-  const { prefer, ...rest } = opts;
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: prefer ?? "return=representation",
-    },
-    ...rest,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
-};
-
-// Fetch look IDs for a given tag — targeted, never hits row caps
-const fetchLookIdsForTag = async (tagId: string): Promise<Set<string>> => {
-  const rows = await sb(`entity_tags?tag_id=eq.${tagId}&entity_type=eq.look&source=eq.human&select=entity_id`);
-  return new Set((rows || []).map((r: any) => r.entity_id));
-};
+import { sb, fetchLookIdsForTag } from "@/lib/supabase";
+import { C, FONT_IMPORT } from "@/lib/theme";
 
 const TAG_TYPE_ORDER = [
   "color", "form", "craft", "pattern", "design_language", "mood", "garment_types",
@@ -38,12 +15,6 @@ const TYPE_LABELS: {[key: string]: string} = {
 };
 
 const EXCLUDED = ["brand","season","event","brand_category","brand_production","event_format"];
-
-const C = {
-  bg: "#212121", lift1: "#2f2f2f", lift2: "#3a3a3a", lift3: "#424242",
-  text: "#ececec", muted: "#8e8ea0", dim: "#555", white: "#fff",
-  green: "#4caf6e", red: "#e05a4e",
-};
 
 export default function TagStudio() {
   const [looks, setLooks] = useState<any[]>([]);
@@ -260,21 +231,18 @@ export default function TagStudio() {
         next.delete(tagId);
         if (primaryTagId === tagId) setPrimaryTagId(null);
         await sb(`entity_tags?entity_id=eq.${look.id}&tag_id=eq.${tagId}&entity_type=eq.look&source=eq.human`, { method:"DELETE", prefer:"" });
-        // Update cache
         setTagCounts(prev => ({ ...prev, [tagId]: Math.max(0, (prev[tagId] ?? 1) - 1) }));
         setLookIdCache(prev => {
           if (!prev[tagId]) return prev;
           const s = new Set(prev[tagId]); s.delete(look.id);
           return { ...prev, [tagId]: s };
         });
-        // If tag filter is active on this tag, update it
         if (tagFilterId === tagId) {
           setTagFilterLookIds(prev => { if (!prev) return prev; const s = new Set(prev); s.delete(look.id); return s; });
         }
       } else {
         next.add(tagId);
         await sb("entity_tags", { method:"POST", body: JSON.stringify({ entity_id:look.id, entity_type:"look", tag_id:tagId, source:"human", model:null }), prefer:"resolution=merge-duplicates" });
-        // Update cache
         setTagCounts(prev => ({ ...prev, [tagId]: (prev[tagId] ?? 0) + 1 }));
         setLookIdCache(prev => {
           if (!prev[tagId]) return prev;
@@ -286,7 +254,6 @@ export default function TagStudio() {
         }
       }
       setActiveTags(next);
-      // Keep taggedLookIds in sync: if any tags remain, mark as tagged; if zero, mark as untagged
       setTaggedLookIds(prev => {
         const s = new Set(prev);
         if (next.size > 0) s.add(look.id); else s.delete(look.id);
@@ -356,7 +323,7 @@ export default function TagStudio() {
 
   if (loading) return (
     <>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');`}</style>
+      <style>{FONT_IMPORT}</style>
       <div style={{background:C.bg,height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,sans-serif"}}>
         <span style={{fontSize:15,color:C.muted}}>Loading…</span>
       </div>
@@ -366,7 +333,7 @@ export default function TagStudio() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        ${FONT_IMPORT}
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -408,7 +375,6 @@ export default function TagStudio() {
             ))}
           </select>
 
-          {/* Status filter */}
           <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setIdx(0); }}
             style={{background:"#484848",border:"1px solid #606060",color:C.text,padding:"7px 12px",fontSize:13,borderRadius:20,outline:"none",cursor:"pointer",fontFamily:"Inter,sans-serif",fontWeight:500}}>
             <option value="published">Published</option>
@@ -417,14 +383,12 @@ export default function TagStudio() {
             <option value="all">All Status</option>
           </select>
 
-          {/* Sort */}
           <select value={sortMode} onChange={e => { setSortMode(e.target.value as any); setIdx(0); }}
             style={{background:"#484848",border:"1px solid #606060",color:C.text,padding:"7px 12px",fontSize:13,borderRadius:20,outline:"none",cursor:"pointer",fontFamily:"Inter,sans-serif",fontWeight:500}}>
             <option value="default">Sort: By brand</option>
             <option value="newest">Sort: Newest first</option>
           </select>
 
-          {/* Untagged only toggle */}
           <button onClick={() => { setUntaggedOnly(v => !v); setIdx(0); }}
             style={{background:untaggedOnly?C.white:"#484848",border:"1px solid #606060",color:untaggedOnly?"#212121":C.text,padding:"7px 12px",fontSize:13,borderRadius:20,cursor:"pointer",fontFamily:"Inter,sans-serif",fontWeight:untaggedOnly?600:500}}>
             Untagged only
@@ -568,8 +532,8 @@ export default function TagStudio() {
                         {look.status && (
                           <span style={{
                             fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",
-                            color: look.status === "published" ? C.green : look.status === "archived" ? C.muted : "#f0a500",
-                            background: `${look.status === "published" ? C.green : look.status === "archived" ? C.muted : "#f0a500"}22`,
+                            color: look.status === "published" ? C.green : look.status === "archived" ? C.muted : C.amber,
+                            background: `${look.status === "published" ? C.green : look.status === "archived" ? C.muted : C.amber}22`,
                             padding:"2px 7px",borderRadius:10
                           }}>{look.status}</span>
                         )}
@@ -644,7 +608,7 @@ export default function TagStudio() {
                           {isColor && on && (
                             <button onClick={e => { e.stopPropagation(); setPrimary(tag.id); }}
                               title={isPrimary ? "Primary color — click to clear" : "Set as primary color"}
-                              style={{background:isPrimary?"#f0a500":C.lift2,border:"none",color:isPrimary?"#212121":C.muted,padding:"6px 8px 6px 10px",fontSize:12,cursor:"pointer",borderRadius:"20px 0 0 20px",fontFamily:"Inter,sans-serif",lineHeight:1,transition:"all 0.1s"}}>
+                              style={{background:isPrimary?C.amber:C.lift2,border:"none",color:isPrimary?"#212121":C.muted,padding:"6px 8px 6px 10px",fontSize:12,cursor:"pointer",borderRadius:"20px 0 0 20px",fontFamily:"Inter,sans-serif",lineHeight:1,transition:"all 0.1s"}}>
                               {isPrimary ? "★" : "☆"}
                             </button>
                           )}
