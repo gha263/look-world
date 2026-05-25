@@ -200,6 +200,7 @@ export default function ReviewQueue() {
   const [selected, setSelected] = useState<Look | null>(null);
   const [saving, setSaving] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   // Entity lists for typeaheads
@@ -256,7 +257,7 @@ export default function ReviewQueue() {
   };
 
   const loadLooks = async () => {
-    setLoading(true); setSelected(null);
+    setLoading(true); setSelected(null); setLoadError(null);
     try {
       const allLooks = await sb("looks?select=status");
       const c: Record<string, number> = { draft: 0, published: 0, archived: 0 };
@@ -265,7 +266,7 @@ export default function ReviewQueue() {
 
       const filter = statusFilter === "all" ? "" : `status=eq.${statusFilter}&`;
       const [data, tagCounts] = await Promise.all([
-        sb(`looks?${filter}select=id,status,cloudinary_url,source_url,source_name,source_platform_id,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,brand_id,event_id,photo_city_id,photo_country_id,courtesy_brand_id,collaborating_brand_id,collection_title,collection_description,publication_id,brand:brand_id(name),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`),
+        sb(`looks?${filter}select=id,status,cloudinary_url,source_url,source_name,source_platform_id,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,brand_id,event_id,photo_city_id,photo_country_id,courtesy_brand_id,collaboration_brand_id,collection_title,collection_description,publication_id,brand:brand_id(name),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`),
         sb(`entity_tags?entity_type=eq.look&select=entity_id`),
       ]);
 
@@ -281,7 +282,7 @@ export default function ReviewQueue() {
         credit_count: l.look_credits?.length || 0,
         tag_count: tagCountMap[l.id] || 0,
       })));
-    } catch(e) { console.error(e); }
+    } catch(e: any) { console.error(e); setLoadError(e?.message || "Failed to load looks."); }
     setLoading(false);
   };
 
@@ -451,6 +452,13 @@ export default function ReviewQueue() {
           <div style={{ width: selected ? "44%" : "100%", flexShrink: 0, overflowY: "auto", borderRight: selected ? `1px solid ${C.lift1}` : "none", transition: "width 0.2s" }}>
             {loading ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200, color: C.muted }}>Loading…</div>
+            ) : loadError ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 300, gap: 10, color: C.red, padding: 24, textAlign: "center" }}>
+                <div style={{ fontSize: 32 }}>⚠</div>
+                <div style={{ fontWeight: 600 }}>Couldn't load looks</div>
+                <div style={{ fontSize: 12, color: C.muted, maxWidth: 380, fontFamily: "monospace", wordBreak: "break-word" }}>{loadError}</div>
+                <button onClick={loadLooks} style={{ marginTop: 4, background: C.lift2, border: "none", color: C.text, padding: "7px 16px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif" }}>Retry</button>
+              </div>
             ) : filteredLooks.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 300, gap: 8, color: C.muted }}>
                 <div style={{ fontSize: 32 }}>✓</div>
