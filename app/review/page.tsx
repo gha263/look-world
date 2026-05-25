@@ -1,31 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-
-const SUPABASE_URL = "https://rsslbgfbdoqxgogbuuzc.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzc2xiZ2ZiZG9xeGdvZ2J1dXpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA1NjE2NTUsImV4cCI6MjA3NjEzNzY1NX0.lBL-KUrQbT9N4ACc-CdMauvXmhtuG9_Jr7nhIhQz-g0";
-
-const sb = async (path: string, opts: any = {}) => {
-  const { prefer, ...rest } = opts;
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: prefer ?? "return=representation",
-    },
-    ...rest,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
-};
-
-const C = {
-  bg: "#212121", lift1: "#2f2f2f", lift2: "#3a3a3a", lift3: "#484848",
-  text: "#ececec", muted: "#8e8ea0", dim: "#555",
-  white: "#fff", green: "#4caf6e", red: "#e05a4e", amber: "#f0a500",
-};
+import { sb, H, SUPABASE_URL } from "@/lib/supabase";
+import { C, FONT_IMPORT } from "@/lib/theme";
 
 // ── Mini Typeahead ─────────────────────────────────────────────────────────────
 
@@ -128,7 +105,7 @@ function CreatePersonModal({ initialName, role, onSave, onClose }: any) {
     try {
       const result = await fetch(`${SUPABASE_URL}/rest/v1/people`, {
         method: "POST",
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+        headers: { ...H, Prefer: "return=representation" },
         body: JSON.stringify({ name: name.trim(), slug: slugify(name), primary_role: primaryRole, instagram_url: ig.trim() || null }),
       });
       if (!result.ok) throw new Error(await result.text());
@@ -432,7 +409,7 @@ export default function ReviewQueue() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        ${FONT_IMPORT}
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
         .look-row:hover { background: #2a2a2a !important; }
@@ -445,12 +422,12 @@ export default function ReviewQueue() {
         {/* Toolbar */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 20px", borderBottom: `1px solid ${C.lift1}`, flexShrink: 0, flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 4 }}>
-            {(["draft","published","archived","all"] as const).map(s => (
-              <button key={s} onClick={() => setStatusFilter(s)}
-                style={{ background: statusFilter===s ? C.lift2 : "transparent", border: "none", color: statusFilter===s ? C.text : C.muted, padding: "6px 14px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", fontWeight: statusFilter===s ? 600 : 400 }}>
-                {s.charAt(0).toUpperCase()+s.slice(1)}
-                {s !== "all" && counts[s] !== undefined && (
-                  <span style={{ marginLeft: 6, fontSize: 11, color: s==="draft" ? C.amber : C.muted }}>{counts[s]}</span>
+            {(["draft","published","archived","all"] as const).map(st => (
+              <button key={st} onClick={() => setStatusFilter(st)}
+                style={{ background: statusFilter===st ? C.lift2 : "transparent", border: "none", color: statusFilter===st ? C.text : C.muted, padding: "6px 14px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", fontWeight: statusFilter===st ? 600 : 400 }}>
+                {st.charAt(0).toUpperCase()+st.slice(1)}
+                {st !== "all" && counts[st] !== undefined && (
+                  <span style={{ marginLeft: 6, fontSize: 11, color: st==="draft" ? C.amber : C.muted }}>{counts[st]}</span>
                 )}
               </button>
             ))}
