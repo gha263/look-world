@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { SUPABASE_URL, H } from "@/lib/supabase";
+import { C, FONT_IMPORT } from "@/lib/theme";
 
 // ─── Seed Data ────────────────────────────────────────────────────────────────
 
@@ -98,23 +100,6 @@ const EVENTS_SEED = [
   { id: "19ad70f7-5c11-4a2d-9961-625934503f42", name: "GTCO Fashion Weekend", event_type: "fashion_fair" },
   { id: "61c1a0e5-9336-4ea2-a2ad-86006f55f136", name: "Pitti Uomo", event_type: "presentation_series" },
 ];
-
-const SUPABASE_URL = "https://rsslbgfbdoqxgogbuuzc.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzc2xiZ2ZiZG9xeGdvZ2J1dXpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA1NjE2NTUsImV4cCI6MjA3NjEzNzY1NX0.lBL-KUrQbT9N4ACc-CdMauvXmhtuG9_Jr7nhIhQz-g0";
-
-// ── Shared headers — used everywhere ─────────────────────────────────────────
-const H = {
-  "Content-Type": "application/json",
-  "apikey": SUPABASE_ANON_KEY,
-  "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-};
-
-// ── Palette ───────────────────────────────────────────────────────────────────
-const C = {
-  bg: "#212121", lift1: "#2f2f2f", lift2: "#3a3a3a", lift3: "#424242",
-  text: "#ececec", muted: "#8e8ea0", dim: "#555",
-  white: "#fff", green: "#4caf6e", red: "#e05a4e",
-};
 
 function slugify(str: string) {
   return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -272,7 +257,7 @@ function CreatePersonModal({ initialName, role, onSave, onClose }: any) {
   const [r, setR] = useState(role || "creative_director");
   return (
     <Modal title="New Person" onClose={onClose} saveDisabled={!name.trim()}
-      onSave={() => onSave({ name: name.trim(), primary_role: r, instagram_handle: ig || null, slug: slugify(name) })}>
+      onSave={() => onSave({ name: name.trim(), primary_role: r, instagram_url: ig || null, slug: slugify(name) })}>
       <F label="Name *"><input style={s.input} value={name} onChange={e => setName(e.target.value)} autoFocus /></F>
       <F label="Role">
         <select style={s.select} value={r} onChange={e => setR(e.target.value)}>
@@ -607,7 +592,7 @@ export default function IntakePage() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        ${FONT_IMPORT}
         * { box-sizing: border-box; }
         input, select, textarea, button { font-family: Inter, sans-serif; }
         input::placeholder, textarea::placeholder { color: #888; }
