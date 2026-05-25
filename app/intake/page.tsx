@@ -539,7 +539,8 @@ export default function IntakePage() {
       is_key_look: isKeyLook,
       status: "draft",
       notes: notes.trim() || null,
-      collaborating_brand_id: isCollab ? (collabBrand?.id?.startsWith("local-") ? null : collabBrand?.id || null) : null,
+      collaboration_brand_id: isCollab ? (collabBrand?.id?.startsWith("local-") ? null : collabBrand?.id || null) : null,
+      is_collaboration: isCollab,
     };
 
     try {
