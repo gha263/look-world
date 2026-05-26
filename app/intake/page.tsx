@@ -101,11 +101,25 @@ const EVENTS_SEED = [
   { id: "61c1a0e5-9336-4ea2-a2ad-86006f55f136", name: "Pitti Uomo", event_type: "presentation_series" },
 ];
 
+// credit_roles fallback — replaced by live fetch on mount
+const CREDIT_ROLES_SEED = [
+  { id: "r1", slug: "creative-director", name: "creative director", sort_order: 10 },
+  { id: "r2", slug: "photographer", name: "photographer", sort_order: 20 },
+  { id: "r3", slug: "stylist", name: "stylist", sort_order: 30 },
+  { id: "r4", slug: "fashion-editor", name: "fashion editor", sort_order: 40 },
+  { id: "r5", slug: "art-director", name: "art director", sort_order: 50 },
+  { id: "r6", slug: "set-designer", name: "set designer", sort_order: 60 },
+  { id: "r7", slug: "hair", name: "hair", sort_order: 70 },
+  { id: "r8", slug: "makeup", name: "makeup", sort_order: 80 },
+  { id: "r9", slug: "casting-director", name: "casting director", sort_order: 90 },
+  { id: "r10", slug: "model", name: "model", sort_order: 100 },
+];
+
 function slugify(str: string) {
   return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-// ── Typeahead ─────────────────────────────────────────────────────────────────
+// ── Typeahead (labelled, for top-level fields) ────────────────────────────────
 
 function Typeahead({ label, items, value, onChange, onClear, placeholder, onCreateClick }: any) {
   const [query, setQuery] = useState("");
@@ -156,7 +170,69 @@ function Typeahead({ label, items, value, onChange, onClear, placeholder, onCrea
               )}
             </div>
           ))}
-          {query.length > 1 && onCreateClick && (
+          {query.length > 1 && onCreateClick && !filtered.find((i: any) => i.name.toLowerCase() === query.toLowerCase()) && (
+            <div style={s.ddCreate} onMouseDown={() => { onCreateClick(query); setQuery(""); setOpen(false); }}>
+              + Create "{query}"
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Inline Typeahead (no label, fixed/flex width — for use inside rows) ────────
+
+function InlineTypeahead({ items, value, onChange, onClear, placeholder, onCreateClick, width }: any) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const filtered = query.length > 0
+    ? items.filter((i: any) => i.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
+    : [];
+
+  useEffect(() => {
+    const fn = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, []);
+
+  const wrapStyle = width
+    ? { position: "relative" as const, width, flexShrink: 0 }
+    : { position: "relative" as const, flex: 1 };
+
+  if (value) {
+    return (
+      <div style={{ ...s.chip, ...(width ? { width, flexShrink: 0 } : { flex: 1 }), justifyContent: "space-between" }}>
+        <span style={{ fontWeight: 500, fontSize: 14, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value.name}</span>
+        <button onClick={onClear} tabIndex={-1} style={s.chipX}>×</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={wrapStyle} ref={ref}>
+      <input
+        style={s.input}
+        value={query}
+        placeholder={placeholder || "Search..."}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={e => { if (e.key === "Tab" || e.key === "Escape") setOpen(false); }}
+      />
+      {open && (filtered.length > 0 || (query.length > 1 && onCreateClick)) && (
+        <div style={s.dd}>
+          {filtered.map((item: any) => (
+            <div key={item.id} style={s.ddRow}
+              onMouseDown={() => { onChange(item); setQuery(""); setOpen(false); }}>
+              <span>{item.name}</span>
+              {(item.primary_role || item.location_type) && (
+                <span style={s.pill}>{item.primary_role || item.location_type}</span>
+              )}
+            </div>
+          ))}
+          {query.length > 1 && onCreateClick && !filtered.find((i: any) => i.name.toLowerCase() === query.toLowerCase()) && (
             <div style={s.ddCreate} onMouseDown={() => { onCreateClick(query); setQuery(""); setOpen(false); }}>
               + Create "{query}"
             </div>
@@ -207,8 +283,6 @@ function SourceAccountInput({ value, onChange, suggestions }: any) {
   );
 }
 
-
-
 function Modal({ title, onClose, onSave, saveDisabled, children }: any) {
   return (
     <div style={s.overlay}>
@@ -251,22 +325,25 @@ function CreateBrandModal({ initialName, locations, onSave, onClose }: any) {
   );
 }
 
-function CreatePersonModal({ initialName, role, onSave, onClose }: any) {
+// Person modal — name (req) + role + instagram_url + website. Role list from credit_roles.
+function CreatePersonModal({ initialName, role, roles, onSave, onClose }: any) {
   const [name, setName] = useState(initialName || "");
   const [ig, setIg] = useState("");
+  const [website, setWebsite] = useState("");
   const [r, setR] = useState(role || "creative_director");
   return (
     <Modal title="New Person" onClose={onClose} saveDisabled={!name.trim()}
-      onSave={() => onSave({ name: name.trim(), primary_role: r, instagram_url: ig || null, slug: slugify(name) })}>
+      onSave={() => onSave({ name: name.trim(), primary_role: r, instagram_url: ig || null, website: website || null, slug: slugify(name) })}>
       <F label="Name *"><input style={s.input} value={name} onChange={e => setName(e.target.value)} autoFocus /></F>
       <F label="Role">
         <select style={s.select} value={r} onChange={e => setR(e.target.value)}>
-          <option value="creative_director">Creative Director</option>
-          <option value="photographer">Photographer</option>
-          <option value="stylist">Stylist</option>
+          {roles.map((role: any) => (
+            <option key={role.id} value={role.slug.replace(/-/g, "_")}>{role.name}</option>
+          ))}
         </select>
       </F>
-      <F label="Instagram Handle"><input style={s.input} value={ig} onChange={e => setIg(e.target.value)} placeholder="@handle" /></F>
+      <F label="Instagram URL"><input style={s.input} value={ig} onChange={e => setIg(e.target.value)} placeholder="https://instagram.com/handle" /></F>
+      <F label="Website"><input style={s.input} value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." /></F>
     </Modal>
   );
 }
@@ -275,9 +352,11 @@ function CreateEventModal({ initialName, locations, onSave, onClose }: any) {
   const [name, setName] = useState(initialName || "");
   const [type, setType] = useState("fashion_week");
   const [loc, setLoc] = useState<any>(null);
+  const [website, setWebsite] = useState("");
+  const [ig, setIg] = useState("");
   return (
     <Modal title="New Event" onClose={onClose} saveDisabled={!name.trim()}
-      onSave={() => onSave({ name: name.trim(), event_type: type, location_id: loc?.id || null, slug: slugify(name) })}>
+      onSave={() => onSave({ name: name.trim(), event_type: type, location_id: loc?.id || null, website: website || null, instagram_handle: ig || null, slug: slugify(name) })}>
       <F label="Name *"><input style={s.input} value={name} onChange={e => setName(e.target.value)} autoFocus /></F>
       <F label="Type">
         <select style={s.select} value={type} onChange={e => setType(e.target.value)}>
@@ -290,6 +369,8 @@ function CreateEventModal({ initialName, locations, onSave, onClose }: any) {
         </select>
       </F>
       <Typeahead label="Location" items={locations} value={loc} onChange={setLoc} onClear={() => setLoc(null)} />
+      <F label="Website"><input style={s.input} value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." /></F>
+      <F label="Instagram Handle"><input style={s.input} value={ig} onChange={e => setIg(e.target.value)} placeholder="@handle" /></F>
     </Modal>
   );
 }
@@ -333,6 +414,9 @@ function CreatePlatformModal({ initialName, onSave, onClose }: any) {
 const INSTAGRAM_ID = "457b78e4-4758-455b-a72b-7ee79c41b46a";
 const BRAND_WEBSITE_ID = "f003e6ff-7e20-459e-85c8-95d2bdc666c7";
 
+type Contributor = { key: string; role: any; person: any };
+type BrandCredit = { key: string; brand: any };
+
 export default function IntakePage() {
   const [platformId, setPlatformId] = useState(INSTAGRAM_ID);
   const [customPlatform, setCustomPlatform] = useState<any>(null);
@@ -342,13 +426,18 @@ export default function IntakePage() {
   const [sourceName, setSourceName] = useState("");
   const [isKeyLook, setIsKeyLook] = useState(false);
 
+  // ── Anchor: brand vs independent creator ──
+  const [anchorMode, setAnchorMode] = useState<"brand" | "creator">("brand");
   const [brand, setBrand] = useState<any>(null);
-  const [creditCDs, setCreditCDs] = useState<any[]>([]);
-  const [creditPhotogs, setCreditPhotogs] = useState<any[]>([]);
-  const [creditStylists, setCreditStylists] = useState<any[]>([]);
+  const [creator, setCreator] = useState<any>(null);
+
   const [courtesy, setCourtesy] = useState(false);
   const [isCollab, setIsCollab] = useState(false);
   const [collabBrand, setCollabBrand] = useState<any>(null);
+
+  // ── Contributors / Brands featured (flexible rows) ──
+  const [contributors, setContributors] = useState<Contributor[]>([]);
+  const [brandCredits, setBrandCredits] = useState<BrandCredit[]>([]);
 
   const [event, setEvent] = useState<any>(null);
   const [scene, setScene] = useState("");
@@ -366,6 +455,7 @@ export default function IntakePage() {
   const [events, setEvents] = useState(EVENTS_SEED);
   const [locations, setLocations] = useState(LOCATIONS_SEED);
   const [platforms, setPlatforms] = useState(PLATFORMS);
+  const [creditRoles, setCreditRoles] = useState(CREDIT_ROLES_SEED);
   const [sourceNames, setSourceNames] = useState<string[]>([]);
 
   const [modal, setModal] = useState<any>(null);
@@ -377,12 +467,13 @@ export default function IntakePage() {
   useEffect(() => {
     async function loadEntities() {
       try {
-        const [b, p, e, l, pl, sn] = await Promise.all([
+        const [b, p, e, l, pl, cr, sn] = await Promise.all([
           fetch(`${SUPABASE_URL}/rest/v1/brands?select=id,name,slug&order=name`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
           fetch(`${SUPABASE_URL}/rest/v1/people?select=id,name,primary_role&order=name`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
           fetch(`${SUPABASE_URL}/rest/v1/events?select=id,name,event_type&order=name`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
           fetch(`${SUPABASE_URL}/rest/v1/locations?select=id,name,location_type,country_code&order=location_type,name`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
           fetch(`${SUPABASE_URL}/rest/v1/source_platforms?select=id,name,slug&order=name`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
+          fetch(`${SUPABASE_URL}/rest/v1/credit_roles?select=id,slug,name,sort_order&order=sort_order`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
           fetch(`${SUPABASE_URL}/rest/v1/looks?select=source_name&not=source_name.is.null&order=source_name`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
         ]);
         if (Array.isArray(b) && b.length > 0) setBrands(b);
@@ -390,6 +481,7 @@ export default function IntakePage() {
         if (Array.isArray(e) && e.length > 0) setEvents(e);
         if (Array.isArray(l) && l.length > 0) setLocations(l);
         if (Array.isArray(pl) && pl.length > 0) setPlatforms(pl);
+        if (Array.isArray(cr) && cr.length > 0) setCreditRoles(cr);
         if (Array.isArray(sn) && sn.length > 0) {
           const unique = [...new Set(sn.map((r: any) => r.source_name?.trim()).filter(Boolean))].sort();
           setSourceNames(unique);
@@ -404,8 +496,9 @@ export default function IntakePage() {
   const cities = locations.filter(l => l.location_type === "city");
   const countries = locations.filter(l => l.location_type === "country");
   const otherPlatforms = platforms.filter(p => p.id !== INSTAGRAM_ID && p.id !== BRAND_WEBSITE_ID);
+  const cdRole = () => creditRoles.find(r => r.slug === "creative-director") || creditRoles[0];
 
-  // ── Entity creation helpers ───────────────────────────────────────────────
+  // ── Entity creation helper ──
   async function post(path: string, data: any) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
       method: "POST",
@@ -416,6 +509,7 @@ export default function IntakePage() {
     return (await res.json())[0];
   }
 
+  // Resolve the brand's known current creative director → add as a contributor row
   async function selectBrand(b: any) {
     setBrand(b);
     if (b?.id && !b.id.startsWith("local-")) {
@@ -425,72 +519,76 @@ export default function IntakePage() {
           { headers: H }
         );
         const rows = await res.json();
-        const directors = rows
-          ?.map((r: any) => r.people)
-          .filter(Boolean)
-          .filter((p: any) => !creditCDs.find((x: any) => x.id === p.id));
-        if (directors?.length > 0) {
-          setCreditCDs(prev => [...prev, ...directors]);
+        const directors = rows?.map((r: any) => r.people).filter(Boolean) || [];
+        if (directors.length > 0) {
+          const role = cdRole();
+          setContributors(prev => {
+            const additions = directors
+              .filter((d: any) => !prev.find(c => c.person?.id === d.id && c.role?.slug === "creative-director"))
+              .map((d: any) => ({ key: `cd-${d.id}-${Date.now()}`, role, person: d }));
+            return [...prev, ...additions];
+          });
         }
       } catch { /* skip */ }
     }
   }
 
+  // ── Contributor row helpers ──
+  function addContributor() {
+    setContributors(prev => [...prev, { key: `c-${Date.now()}-${prev.length}`, role: cdRole(), person: null }]);
+  }
+  function updateContributorRole(key: string, role: any) {
+    setContributors(prev => prev.map(c => c.key === key ? { ...c, role } : c));
+  }
+  function updateContributorPerson(key: string, person: any) {
+    setContributors(prev => prev.map(c => c.key === key ? { ...c, person } : c));
+  }
+  function removeContributor(key: string) {
+    setContributors(prev => prev.filter(c => c.key !== key));
+  }
+
+  // ── Brand credit row helpers ──
+  function addBrandCredit() {
+    setBrandCredits(prev => [...prev, { key: `b-${Date.now()}-${prev.length}`, brand: null }]);
+  }
+  function updateBrandCredit(key: string, brand: any) {
+    setBrandCredits(prev => prev.map(b => b.key === key ? { ...b, brand } : b));
+  }
+  function removeBrandCredit(key: string) {
+    setBrandCredits(prev => prev.filter(b => b.key !== key));
+  }
+
+  // Fast role creation — slugify, POST to credit_roles, apply object to triggering row
+  async function createRole(name: string, rowKey: string) {
+    const slug = slugify(name);
+    let created;
+    try {
+      created = await post("credit_roles", { name: name.trim().toLowerCase(), slug, sort_order: 999 });
+    } catch {
+      created = { id: `local-${Date.now()}`, name: name.trim().toLowerCase(), slug, sort_order: 999 };
+    }
+    setCreditRoles(prev => [...prev, created].sort((a: any, b: any) => a.sort_order - b.sort_order));
+    updateContributorRole(rowKey, created);
+  }
+
+  // ── Create-entity handlers (routed by modal.target) ──
   async function handleCreateBrand(data: any) {
     let c; try { c = await post("brands", data); } catch { c = { ...data, id: `local-${Date.now()}` }; }
     setBrands(p => [...p, c].sort((a: any, b: any) => a.name.localeCompare(b.name)));
-    await selectBrand(c);
-    // If a creative director is already in the credits list, link them to this new brand
-    if (!c.id.startsWith("local-") && creditCDs.length > 0) {
-      for (const cd of creditCDs) {
-        if (cd.id.startsWith("local-")) continue;
-        try {
-          // Write brand_directors join row
-          await fetch(`${SUPABASE_URL}/rest/v1/brand_directors`, {
-            method: "POST",
-            headers: { ...H, Prefer: "resolution=merge-duplicates" },
-            body: JSON.stringify({ brand_id: c.id, person_id: cd.id, is_current: true }),
-          });
-          // Write brands.creative_director_id if not already set
-          await fetch(`${SUPABASE_URL}/rest/v1/brands?id=eq.${c.id}`, {
-            method: "PATCH",
-            headers: { ...H, Prefer: "" },
-            body: JSON.stringify({ creative_director_id: cd.id }),
-          });
-        } catch { /* non-fatal */ }
-      }
-    }
+    if (modal?.target === "collab") setCollabBrand(c);
+    else if (modal?.target?.startsWith("brandcredit:")) updateBrandCredit(modal.target.split(":")[1], c);
+    else await selectBrand(c);
     setModal(null);
   }
 
   async function handleCreatePerson(data: any) {
     let c; try { c = await post("people", data); } catch { c = { ...data, id: `local-${Date.now()}` }; }
     setPeople(p => [...p, c].sort((a: any, b: any) => a.name.localeCompare(b.name)));
-    const role = modal?.role;
-    if (role === "creative_director") {
-      setCreditCDs(prev => [...prev, c]);
-      // If a brand is already selected and both are in DB, write all connections
-      if (brand?.id && !brand.id.startsWith("local-") && !c.id.startsWith("local-")) {
-        try {
-          // Write brand_directors join row
-          await fetch(`${SUPABASE_URL}/rest/v1/brand_directors`, {
-            method: "POST",
-            headers: { ...H, Prefer: "resolution=merge-duplicates" },
-            body: JSON.stringify({ brand_id: brand.id, person_id: c.id, is_current: true }),
-          });
-          // Write brands.creative_director_id
-          await fetch(`${SUPABASE_URL}/rest/v1/brands?id=eq.${brand.id}`, {
-            method: "PATCH",
-            headers: { ...H, Prefer: "" },
-            body: JSON.stringify({ creative_director_id: c.id }),
-          });
-        } catch { /* non-fatal */ }
-      }
-    }
-    else if (role === "photographer") setCreditPhotogs(prev => [...prev, c]);
-    else setCreditStylists(prev => [...prev, c]);
+    if (modal?.target === "anchor-creator") setCreator(c);
+    else if (modal?.target?.startsWith("contributor:")) updateContributorPerson(modal.target.split(":")[1], c);
     setModal(null);
   }
+
   async function handleCreateEvent(data: any) {
     let c; try { c = await post("events", data); } catch { c = { ...data, id: `local-${Date.now()}` }; }
     setEvents(p => [...p, c].sort((a: any, b: any) => a.name.localeCompare(b.name)));
@@ -507,7 +605,6 @@ export default function IntakePage() {
     setPlatforms(p => [...p, c].sort((a: any, b: any) => a.name.localeCompare(b.name)));
     setCustomPlatform(c); setPlatformId(""); setModal(null);
   }
-
   async function handleCreatePublication(data: any) {
     let c; try { c = await post("source_platforms", data); } catch { c = { ...data, id: `local-${Date.now()}` }; }
     setPlatforms(p => [...p, c].sort((a: any, b: any) => a.name.localeCompare(b.name)));
@@ -517,30 +614,35 @@ export default function IntakePage() {
   // ── Submit ────────────────────────────────────────────────────────────────
   async function handleSubmit() {
     if (!cdnUrl.trim()) { setStatus("error"); setErrorMsg("CDN image URL is required."); return; }
+    if (anchorMode === "brand" && !brand) { setStatus("error"); setErrorMsg("Select a brand, or switch to Independent Creator."); return; }
+    if (anchorMode === "creator" && !creator) { setStatus("error"); setErrorMsg("Select a creator, or switch to Brand."); return; }
     setStatus("submitting"); setErrorMsg("");
 
     const pid = customPlatform?.id?.startsWith("local-") ? null : (customPlatform?.id || platformId);
+    const cleanId = (x: any) => (x?.id && !x.id.startsWith("local-") ? x.id : null);
+
     const look = {
       source_url: sourceUrl.trim() || null,
       source_cdn_url: cdnUrl.trim(),
       source_name: sourceName.trim() || null,
       source_platform_id: pid,
-      publication_id: publication?.id?.startsWith("local-") ? null : (publication?.id || null),
-      brand_id: brand?.id?.startsWith("local-") ? null : (brand?.id || null),
-      courtesy_brand_id: courtesy ? (brand?.id?.startsWith("local-") ? null : brand?.id || null) : null,
-      event_id: event?.id?.startsWith("local-") ? null : (event?.id || null),
+      publication_id: cleanId(publication),
+      brand_id: anchorMode === "brand" ? cleanId(brand) : null,
+      creator_id: anchorMode === "creator" ? cleanId(creator) : null,
+      courtesy_brand_id: (anchorMode === "brand" && courtesy) ? cleanId(brand) : null,
+      event_id: cleanId(event),
       scene: scene || "other",
       season_term: seasonTerm || null,
       season_year: seasonYear ? parseInt(seasonYear) : null,
       gender: gender || null,
       date_published: publishDate || null,
-      photo_city_id: photoCity?.id?.startsWith("local-") ? null : (photoCity?.id || null),
-      photo_country_id: photoCountry?.id?.startsWith("local-") ? null : (photoCountry?.id || null),
+      photo_city_id: cleanId(photoCity),
+      photo_country_id: cleanId(photoCountry),
       is_key_look: isKeyLook,
       status: "draft",
       notes: notes.trim() || null,
-      collaboration_brand_id: isCollab ? (collabBrand?.id?.startsWith("local-") ? null : collabBrand?.id || null) : null,
-      is_collaboration: isCollab,
+      is_collaboration: anchorMode === "brand" ? isCollab : false,
+      collaboration_brand_id: (anchorMode === "brand" && isCollab) ? cleanId(collabBrand) : null,
     };
 
     try {
@@ -553,18 +655,27 @@ export default function IntakePage() {
       if (!res.ok) throw new Error(await res.text());
       const lookId = (await res.json())[0]?.id;
 
-      // Insert credits
-      const credits = [
-        ...creditCDs.map(p => ({ look_id: lookId, person_id: p.id?.startsWith("local-") ? null : p.id, role: "creative director" })),
-        ...(!courtesy ? creditPhotogs.map(p => ({ look_id: lookId, person_id: p.id?.startsWith("local-") ? null : p.id, role: "photographer" })) : []),
-        ...creditStylists.map(p => ({ look_id: lookId, person_id: p.id?.startsWith("local-") ? null : p.id, role: "stylist" })),
-      ].filter((c: any) => c && c.person_id);
-
+      // Contributors → look_credits (role = credit_roles.name)
+      const credits = contributors
+        .filter(c => c.person && !c.person.id?.startsWith("local-") && c.role)
+        .map((c, i) => ({ look_id: lookId, person_id: c.person.id, role: c.role.name, credit_order: i }));
       if (credits.length > 0) {
         await fetch(`${SUPABASE_URL}/rest/v1/look_credits`, {
           method: "POST",
           headers: { ...H, "Prefer": "return=representation" },
           body: JSON.stringify(credits),
+        });
+      }
+
+      // Brands featured → look_brand_credits (role null for now)
+      const bCredits = brandCredits
+        .filter(b => b.brand && !b.brand.id?.startsWith("local-"))
+        .map((b, i) => ({ look_id: lookId, brand_id: b.brand.id, role: null, credit_order: i }));
+      if (bCredits.length > 0) {
+        await fetch(`${SUPABASE_URL}/rest/v1/look_brand_credits`, {
+          method: "POST",
+          headers: { ...H, "Prefer": "return=representation" },
+          body: JSON.stringify(bCredits),
         });
       }
 
@@ -579,8 +690,9 @@ export default function IntakePage() {
 
   function resetForm() {
     setSourceUrl(""); setCdnUrl(""); setSourceName(""); setIsKeyLook(false);
-    setBrand(null); setCreditCDs([]); setCreditPhotogs([]); setCreditStylists([]); setCourtesy(false);
-    setIsCollab(false); setCollabBrand(null);
+    setAnchorMode("brand"); setBrand(null); setCreator(null);
+    setContributors([]); setBrandCredits([]);
+    setCourtesy(false); setIsCollab(false); setCollabBrand(null);
     setEvent(null); setScene(""); setSeasonTerm(""); setSeasonYear(""); setGender(""); setPublishDate("");
     setPhotoCity(null); setPhotoCountry(null); setNotes("");
     setPlatformId(INSTAGRAM_ID); setCustomPlatform(null); setPublication(null);
@@ -656,77 +768,102 @@ export default function IntakePage() {
 
           {/* ATTRIBUTION */}
           <Card title="Attribution">
-            <Typeahead label="Brand" items={brands} value={brand}
-              onChange={selectBrand} onClear={() => { setBrand(null); setCreditCDs([]); setCourtesy(false); }}
-              onCreateClick={(name: string) => setModal({ type: "brand", name })} />
+
+            {/* Anchor toggle */}
+            <F label="Anchor">
+              <div style={{ display: "flex", gap: 8 }}>
+                <button tabIndex={-1} style={{ ...s.tog, ...(anchorMode === "brand" ? s.togOn : {}) }}
+                  onClick={() => { setAnchorMode("brand"); setCreator(null); }}>Brand</button>
+                <button tabIndex={-1} style={{ ...s.tog, ...(anchorMode === "creator" ? s.togOn : {}) }}
+                  onClick={() => { setAnchorMode("creator"); setBrand(null); setCourtesy(false); setIsCollab(false); setCollabBrand(null); }}>Independent Creator</button>
+              </div>
+            </F>
+
+            {anchorMode === "brand" ? (
+              <>
+                <Typeahead label="Brand" items={brands} value={brand}
+                  onChange={selectBrand} onClear={() => { setBrand(null); setCourtesy(false); }}
+                  onCreateClick={(name: string) => setModal({ type: "brand", name, target: "anchor" })} />
+
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <label style={{ ...s.ckLabel, ...(brand ? {} : { color: C.dim, cursor: "default" }) }}>
+                    <input type="checkbox" checked={courtesy} disabled={!brand} style={s.ck}
+                      onChange={e => setCourtesy(e.target.checked)} />
+                    Courtesy of brand
+                  </label>
+                  {!brand && <span style={{ fontSize: 12, color: C.dim, fontStyle: "italic" }}>select a brand first</span>}
+                </div>
+
+                {/* Collaboration */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <label style={s.ckLabel}>
+                    <input type="checkbox" checked={isCollab} style={s.ck}
+                      onChange={e => { setIsCollab(e.target.checked); if (!e.target.checked) setCollabBrand(null); }} />
+                    This is a collaboration
+                  </label>
+                </div>
+                {isCollab && (
+                  <Typeahead label="Collaborating Brand" items={brands.filter((b: any) => b.id !== brand?.id)}
+                    value={collabBrand} onChange={setCollabBrand} onClear={() => setCollabBrand(null)}
+                    onCreateClick={(name: string) => setModal({ type: "brand", name, target: "collab" })} />
+                )}
+              </>
+            ) : (
+              <Typeahead label="Independent Creator" items={people} value={creator}
+                onChange={setCreator} onClear={() => setCreator(null)}
+                onCreateClick={(name: string) => setModal({ type: "person", name, role: "creative_director", target: "anchor-creator" })} />
+            )}
+
+            {/* ── Contributors ── */}
             <div style={s.field}>
-              <label style={s.label}>Creative Director</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: creditCDs.length > 0 ? 6 : 0 }}>
-                {creditCDs.map((p: any) => (
-                  <div key={p.id} style={s.chip}>
-                    <span style={{ fontWeight: 500, fontSize: 14, color: C.text }}>{p.name}</span>
-                    <button onClick={() => setCreditCDs(prev => prev.filter(x => x.id !== p.id))} tabIndex={-1} style={s.chipX}>×</button>
+              <label style={s.label}>Contributors</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {contributors.map(c => (
+                  <div key={c.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <InlineTypeahead
+                      width={180}
+                      items={creditRoles}
+                      value={c.role}
+                      onChange={(r: any) => updateContributorRole(c.key, r)}
+                      onClear={() => updateContributorRole(c.key, null)}
+                      placeholder="Role..."
+                      onCreateClick={(name: string) => createRole(name, c.key)}
+                    />
+                    <InlineTypeahead
+                      items={people}
+                      value={c.person}
+                      onChange={(p: any) => updateContributorPerson(c.key, p)}
+                      onClear={() => updateContributorPerson(c.key, null)}
+                      placeholder="Search or create person..."
+                      onCreateClick={(name: string) => setModal({ type: "person", name, role: (c.role?.slug || "creative-director").replace(/-/g, "_"), target: `contributor:${c.key}` })}
+                    />
+                    <button tabIndex={-1} onClick={() => removeContributor(c.key)} style={s.rowX}>×</button>
                   </div>
                 ))}
+                <button onClick={addContributor} style={s.addRow}>+ Add contributor</button>
               </div>
-              <Typeahead items={people.filter((p: any) => p.primary_role === "creative_director" && !creditCDs.find((x: any) => x.id === p.id))}
-                value={null} onChange={(p: any) => setCreditCDs(prev => [...prev, p])}
-                onClear={() => {}} placeholder="Add creative director..."
-                onCreateClick={(name: string) => setModal({ type: "person", name, role: "creative_director" })} />
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <label style={{ ...s.ckLabel, ...(brand ? {} : { color: C.dim, cursor: "default" }) }}>
-                <input type="checkbox" checked={courtesy} disabled={!brand} style={s.ck}
-                  onChange={e => { setCourtesy(e.target.checked); if (e.target.checked) setCreditPhotogs([]); }} />
-                Courtesy of brand
-              </label>
-              {!brand && <span style={{ fontSize: 12, color: C.dim, fontStyle: "italic" }}>select a brand first</span>}
             </div>
 
-            {/* Collaboration */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <label style={s.ckLabel}>
-                <input type="checkbox" checked={isCollab} style={s.ck}
-                  onChange={e => { setIsCollab(e.target.checked); if (!e.target.checked) setCollabBrand(null); }} />
-                Collaboration
-              </label>
-            </div>
-            {isCollab && (
-              <Typeahead label="Collaborating Brand" items={brands.filter((b: any) => b.id !== brand?.id)}
-                value={collabBrand} onChange={setCollabBrand} onClear={() => setCollabBrand(null)}
-                onCreateClick={(name: string) => setModal({ type: "brand", name })} />
-            )}
-            {!courtesy && (
-              <div style={s.field}>
-                <label style={s.label}>Photographer</label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: creditPhotogs.length > 0 ? 6 : 0 }}>
-                  {creditPhotogs.map((p: any) => (
-                    <div key={p.id} style={s.chip}>
-                      <span style={{ fontWeight: 500, fontSize: 14, color: C.text }}>{p.name}</span>
-                      <button onClick={() => setCreditPhotogs(prev => prev.filter(x => x.id !== p.id))} tabIndex={-1} style={s.chipX}>×</button>
-                    </div>
-                  ))}
-                </div>
-                <Typeahead items={people.filter((p: any) => p.primary_role === "photographer" && !creditPhotogs.find((x: any) => x.id === p.id))}
-                  value={null} onChange={(p: any) => setCreditPhotogs(prev => [...prev, p])}
-                  onClear={() => {}} placeholder="Add photographer..."
-                  onCreateClick={(name: string) => setModal({ type: "person", name, role: "photographer" })} />
-              </div>
-            )}
+            {/* ── Brands Featured ── */}
             <div style={s.field}>
-              <label style={s.label}>Stylist</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: creditStylists.length > 0 ? 6 : 0 }}>
-                {creditStylists.map((p: any) => (
-                  <div key={p.id} style={s.chip}>
-                    <span style={{ fontWeight: 500, fontSize: 14, color: C.text }}>{p.name}</span>
-                    <button onClick={() => setCreditStylists(prev => prev.filter(x => x.id !== p.id))} tabIndex={-1} style={s.chipX}>×</button>
+              <label style={s.label}>Brands Featured</label>
+              <span style={{ fontSize: 12, color: C.dim, marginTop: -2 }}>Brands worn or featured in the look (separate from the anchor)</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+                {brandCredits.map(b => (
+                  <div key={b.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <InlineTypeahead
+                      items={brands}
+                      value={b.brand}
+                      onChange={(br: any) => updateBrandCredit(b.key, br)}
+                      onClear={() => updateBrandCredit(b.key, null)}
+                      placeholder="Search or create brand..."
+                      onCreateClick={(name: string) => setModal({ type: "brand", name, target: `brandcredit:${b.key}` })}
+                    />
+                    <button tabIndex={-1} onClick={() => removeBrandCredit(b.key)} style={s.rowX}>×</button>
                   </div>
                 ))}
+                <button onClick={addBrandCredit} style={s.addRow}>+ Add brand</button>
               </div>
-              <Typeahead items={people.filter((p: any) => p.primary_role === "stylist" && !creditStylists.find((x: any) => x.id === p.id))}
-                value={null} onChange={(p: any) => setCreditStylists(prev => [...prev, p])}
-                onClear={() => {}} placeholder="Add stylist..."
-                onCreateClick={(name: string) => setModal({ type: "person", name, role: "stylist" })} />
             </div>
           </Card>
 
@@ -813,7 +950,7 @@ export default function IntakePage() {
 
         {/* Modals */}
         {modal?.type === "brand" && <CreateBrandModal initialName={modal.name} locations={locations} onSave={handleCreateBrand} onClose={() => setModal(null)} />}
-        {modal?.type === "person" && <CreatePersonModal initialName={modal.name} role={modal.role} onSave={handleCreatePerson} onClose={() => setModal(null)} />}
+        {modal?.type === "person" && <CreatePersonModal initialName={modal.name} role={modal.role} roles={creditRoles} onSave={handleCreatePerson} onClose={() => setModal(null)} />}
         {modal?.type === "event" && <CreateEventModal initialName={modal.name} locations={locations} onSave={handleCreateEvent} onClose={() => setModal(null)} />}
         {modal?.type === "city" && <CreateLocationModal initialName={modal.name} type="city" locations={locations} onSave={handleCreateLocation} onClose={() => setModal(null)} />}
         {modal?.type === "country" && <CreateLocationModal initialName={modal.name} type="country" locations={locations} onSave={handleCreateLocation} onClose={() => setModal(null)} />}
@@ -879,6 +1016,18 @@ const s: Record<string, any> = {
   chipX: {
     background: "none", border: "none", color: C.muted,
     fontSize: 20, cursor: "pointer", padding: 0, lineHeight: 1,
+  },
+
+  // Row controls for contributor / brand-credit lists
+  rowX: {
+    background: "none", border: "none", color: C.muted,
+    fontSize: 22, cursor: "pointer", padding: "0 4px", lineHeight: 1, flexShrink: 0,
+  },
+  addRow: {
+    alignSelf: "flex-start",
+    background: "transparent", border: `1.5px dashed ${C.lift3}`,
+    color: C.muted, padding: "8px 16px", fontSize: 13,
+    cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif",
   },
 
   ckLabel: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 14, color: C.text, userSelect: "none" },
