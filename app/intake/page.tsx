@@ -9,99 +9,13 @@ import { C, FONT_IMPORT } from "@/lib/theme";
 const PLATFORMS = [
   { id: "457b78e4-4758-455b-a72b-7ee79c41b46a", name: "Instagram", slug: "instagram" },
   { id: "f003e6ff-7e20-459e-85c8-95d2bdc666c7", name: "Brand Website", slug: "brand-website" },
-  { id: "0cb4b776-cea5-483d-8b75-2a75d356e68d", name: "Arise Fashion Week", slug: "arise-fashion-week" },
-  { id: "d0f372ca-984e-4d83-9cc9-eefb4953fbee", name: "Dakar Fashion Week", slug: "dakar-fashion-week" },
-  { id: "6c404e95-db6a-4b08-ab82-4bcd8c19e9f8", name: "Dazed", slug: "dazed" },
-  { id: "63ff261f-d445-47d1-bfa4-3fa9226ffdb6", name: "Fashion Network", slug: "fashion-network" },
-  { id: "b00ef47b-e584-48c0-b0de-ba384508f8d1", name: "Highsnobiety", slug: "highsnobiety" },
-  { id: "9f964305-b9c5-4276-803a-021067dc3f05", name: "Hypebeast", slug: "hypebeast" },
-  { id: "d3e59786-4c92-497a-99f4-607c10e3c43e", name: "i-D Magazine", slug: "id-magazine" },
-  { id: "a2e86215-044a-4e3b-9b7f-f53c6ae8b64c", name: "Lagos Fashion Week", slug: "lagos-fashion-week" },
-  { id: "de5cbaff-35cc-4e88-b60c-56c2fa1248fa", name: "Nairobi Fashion Week", slug: "nairobi-fashion-week" },
-  { id: "a5da175b-39d9-40e3-a58d-3f30a5e65acd", name: "SDR Photo", slug: "sdr-photo" },
-  { id: "fc9570c9-0ab0-4033-9caf-4a0b99c6ffef", name: "South Africa Fashion Week", slug: "sa-fashion-week" },
-  { id: "8fa0b045-3bd1-4fdd-bf0f-5a4ea4b59447", name: "Style House Files", slug: "style-house-files" },
-  { id: "197a6028-9289-4f75-bd39-a4b23c6ae1b6", name: "System Magazine", slug: "system-magazine" },
-  { id: "97e8da1e-6ce6-419e-85d8-1a89f8b7f3a8", name: "Vogue", slug: "vogue" },
-  { id: "1192d6e1-deb3-4025-83ec-4fa679811b95", name: "Vogue Runway", slug: "vogue-runway" },
 ];
 
-const BRANDS_SEED = [
-  { id: "6c3f6478-130a-48fb-9134-dd812be0a271", name: "Absent Findings" },
-  { id: "d4266d56-8b88-4dbd-9685-faa6064a6887", name: "Ahluwalia" },
-  { id: "37fe3b12-acb0-4ca1-bfe5-4bbf3d138d3d", name: "Ajabeng" },
-  { id: "e335baaf-e5b5-46c7-bb69-22f61651ef79", name: "Orange Culture" },
-  { id: "d471337c-936b-4a6f-9b5e-ccacd13b739e", name: "Thebe Magugu" },
-  { id: "2f1e3aba-22f7-4d88-acfa-68bcfe8ee706", name: "Emmy Kasbit" },
-  { id: "2e8fc4b8-f369-4c1c-9515-7a0f44a6ada9", name: "MaXhosa Africa" },
-  { id: "87e6de5a-3a64-40eb-a95b-af1e86d05198", name: "Lagos Space Programme" },
-  { id: "6f105708-5ff6-4234-9fa1-996e04084c27", name: "Iamisigo" },
-  { id: "873c143a-3deb-422f-aa75-fa97ed56690b", name: "Kilentar" },
-  { id: "934feec4-f3fc-48d6-bf60-2161447d1b7e", name: "Rich Mnisi" },
-  { id: "3af43919-6872-4241-ad95-aa1c887ca917", name: "Sindiso Khumalo" },
-  { id: "0f29f594-f430-4c9b-bf69-ddb75c444582", name: "Selly Raby Kane" },
-  { id: "cbfd089d-3d3a-4949-8785-37f5868a13b1", name: "Tongoro" },
-  { id: "f2aee82a-68ed-423d-abb4-baa3c623bb63", name: "Maki Oh" },
-  { id: "e017f773-61f6-4c41-9364-f2f10a7d71db", name: "Tokyo James" },
-  { id: "f2d47a6a-7cd0-481d-994e-cb084ed5246b", name: "Tolu Coker" },
-  { id: "304e5e18-5dbb-4cc0-af39-7ab6551b6bd4", name: "Lukhanyo Mdingi" },
-  { id: "96587400-555d-4ed8-8019-38cdd24c5314", name: "Kenneth Ize" },
-  { id: "d3a5782a-abce-47b3-95b3-c8485d9052cd", name: "Masa Mara" },
-];
+const BRANDS_SEED: any[] = [];
+const PEOPLE_SEED: any[] = [];
+const LOCATIONS_SEED: any[] = [];
+const EVENTS_SEED: any[] = [];
 
-const PEOPLE_SEED = [
-  { id: "f4da6e79-1016-46dd-98bd-c12b6fecf939", name: "Adebayo Oke-Lawal", primary_role: "creative_director" },
-  { id: "d4191ed0-bf88-490a-a438-a74aedebb7a0", name: "Thebetsile Magugu", primary_role: "creative_director" },
-  { id: "a2c783cd-9b62-43a4-bcac-7c10d84a41c8", name: "Rich Mnisi", primary_role: "creative_director" },
-  { id: "268b1854-bd7e-458d-a516-e863311ba030", name: "Sindiso Khumalo", primary_role: "creative_director" },
-  { id: "97be7108-5f20-4424-aa41-5133ea3ce9ef", name: "Priya Ahluwalia", primary_role: "creative_director" },
-  { id: "20c770f9-8101-4115-aa17-bcf8c387071e", name: "Tolu Coker", primary_role: "creative_director" },
-  { id: "16b49f40-8bda-40b5-bb7b-37ae1f2ebea1", name: "Lukhanyo Mdingi", primary_role: "creative_director" },
-  { id: "b34790e5-1f4e-48d8-998e-1e1c4118ca64", name: "Kristin Lee Moolman", primary_role: "photographer" },
-  { id: "3ff2d938-508a-45ac-aec5-fc75e172d633", name: "Simon Deiner", primary_role: "photographer" },
-  { id: "60f15aa2-af09-47c8-8ef4-8d772af2ea76", name: "Ibrahim Kamara", primary_role: "photographer" },
-  { id: "3b882d1c-a9f0-47c1-a7e9-8fc8883860ad", name: "Tosin Ogundadegbe", primary_role: "stylist" },
-  { id: "b3076fee-c51b-44ad-89b9-5cc5f8885d2f", name: "Beri Kukua", primary_role: "stylist" },
-  { id: "be1e8f31-d705-473c-a5bb-2655e0a32049", name: "Eniafe Momodu", primary_role: "stylist" },
-];
-
-const LOCATIONS_SEED = [
-  { id: "fe519377-3486-40de-b508-4100daebf2fb", name: "Lagos", location_type: "city" },
-  { id: "9f928bc8-136e-4466-b649-1f157e15aee4", name: "Accra", location_type: "city" },
-  { id: "7f988e5c-f642-442d-81ef-22bc420bb97a", name: "Johannesburg", location_type: "city" },
-  { id: "c81ee8d5-799a-4af4-9287-0f29ae83fb6a", name: "Cape Town", location_type: "city" },
-  { id: "74352752-4a91-4c65-824b-509041fed6aa", name: "Nairobi", location_type: "city" },
-  { id: "c6b94ca0-fa31-4dcb-929d-9c323fb6145e", name: "Dakar", location_type: "city" },
-  { id: "779be68c-cfd1-4ded-8462-c6c1762eee25", name: "Paris", location_type: "city" },
-  { id: "b0777b8c-0fdd-4139-a893-acc895255936", name: "London", location_type: "city" },
-  { id: "2dde81c9-ee7d-49d9-b2ba-27211648b24b", name: "New York City", location_type: "city" },
-  { id: "3eb9335a-76f9-4a8b-9fba-5c08d5a46121", name: "Mumbai", location_type: "city" },
-  { id: "d0f2239e-8964-438e-b32e-789a2b4255c3", name: "Jakarta", location_type: "city" },
-  { id: "efaaea08-9ee8-410d-80ee-19ae44044d2a", name: "São Paulo", location_type: "city" },
-  { id: "1ac42e4f-4510-499d-b479-02657f265689", name: "Nigeria", location_type: "country" },
-  { id: "99fe2396-7c8e-4154-b9d0-0dbec5f43a07", name: "South Africa", location_type: "country" },
-  { id: "d8ebe365-8c6f-4665-8d80-5cb8fe893e87", name: "Ghana", location_type: "country" },
-  { id: "47eec268-bd27-47a4-b348-5a556b3494a9", name: "Kenya", location_type: "country" },
-  { id: "7f661801-217d-4e5d-8719-f33f73750bda", name: "Senegal", location_type: "country" },
-  { id: "6c3871b7-422e-470e-b39b-b3a3470929f6", name: "India", location_type: "country" },
-  { id: "e86dbc98-99b2-4bf5-a065-701163810c0d", name: "Indonesia", location_type: "country" },
-  { id: "1c288058-de05-42c0-8f39-56ed63da8cfb", name: "United Kingdom", location_type: "country" },
-  { id: "e1182073-90ca-488b-9dc4-a0fe8a5163f4", name: "France", location_type: "country" },
-];
-
-const EVENTS_SEED = [
-  { id: "b196c528-f381-490d-9ea6-daf7981663d1", name: "Lagos Fashion Week", event_type: "fashion_week" },
-  { id: "319f8d7b-5e6e-4f3c-b726-5f914c94fc82", name: "South African Fashion Week", event_type: "fashion_week" },
-  { id: "9df58881-8ca7-47c4-abe5-530c48d064b0", name: "London Fashion Week", event_type: "fashion_week" },
-  { id: "6e130467-baf6-478c-8c54-31f1a81e8cdf", name: "Paris Fashion Week", event_type: "fashion_week" },
-  { id: "31d50ffe-231f-4623-88c3-e6fbd129bb1a", name: "New York Fashion Week", event_type: "fashion_week" },
-  { id: "939a2687-9e4d-4839-aa5d-48d26432db45", name: "Jakarta Fashion Week", event_type: "fashion_week" },
-  { id: "9190c268-7757-4d40-a382-206be43fd905", name: "Lakme Fashion Week", event_type: "fashion_week" },
-  { id: "19ad70f7-5c11-4a2d-9961-625934503f42", name: "GTCO Fashion Weekend", event_type: "fashion_fair" },
-  { id: "61c1a0e5-9336-4ea2-a2ad-86006f55f136", name: "Pitti Uomo", event_type: "presentation_series" },
-];
-
-// credit_roles fallback — replaced by live fetch on mount
 const CREDIT_ROLES_SEED = [
   { id: "r1", slug: "creative-director", name: "creative director", sort_order: 10 },
   { id: "r2", slug: "photographer", name: "photographer", sort_order: 20 },
@@ -119,7 +33,7 @@ function slugify(str: string) {
   return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-// ── Typeahead (labelled, for top-level fields) ────────────────────────────────
+// ── Labelled Typeahead (top-level fields) ────────────────────────────────────────
 
 function Typeahead({ label, items, value, onChange, onClear, placeholder, onCreateClick }: any) {
   const [query, setQuery] = useState("");
@@ -181,7 +95,7 @@ function Typeahead({ label, items, value, onChange, onClear, placeholder, onCrea
   );
 }
 
-// ── Inline Typeahead (no label, fixed/flex width — for use inside rows) ────────
+// ── Inline Typeahead (used inside list rows; bare, optional fixed width) ────────
 
 function InlineTypeahead({ items, value, onChange, onClear, placeholder, onCreateClick, width }: any) {
   const [query, setQuery] = useState("");
@@ -243,7 +157,7 @@ function InlineTypeahead({ items, value, onChange, onClear, placeholder, onCreat
   );
 }
 
-// ── Source Account Input with autocomplete ────────────────────────────────────
+// ── Source Account Input ─────────────────────────────────────────────────────────
 
 function SourceAccountInput({ value, onChange, suggestions }: any) {
   const [open, setOpen] = useState(false);
@@ -325,7 +239,6 @@ function CreateBrandModal({ initialName, locations, onSave, onClose }: any) {
   );
 }
 
-// Person modal — name (req) + role + instagram_url + website. Role list from credit_roles.
 function CreatePersonModal({ initialName, role, roles, onSave, onClose }: any) {
   const [name, setName] = useState(initialName || "");
   const [ig, setIg] = useState("");
@@ -415,7 +328,7 @@ const INSTAGRAM_ID = "457b78e4-4758-455b-a72b-7ee79c41b46a";
 const BRAND_WEBSITE_ID = "f003e6ff-7e20-459e-85c8-95d2bdc666c7";
 
 type Contributor = { key: string; role: any; person: any };
-type BrandCredit = { key: string; brand: any };
+type BrandRow    = { key: string; brand: any; isCourtesy: boolean };
 
 export default function IntakePage() {
   const [platformId, setPlatformId] = useState(INSTAGRAM_ID);
@@ -426,18 +339,12 @@ export default function IntakePage() {
   const [sourceName, setSourceName] = useState("");
   const [isKeyLook, setIsKeyLook] = useState(false);
 
-  // ── Anchor: brand vs independent creator ──
-  const [anchorMode, setAnchorMode] = useState<"brand" | "creator">("brand");
-  const [brand, setBrand] = useState<any>(null);
-  const [creator, setCreator] = useState<any>(null);
-
-  const [courtesy, setCourtesy] = useState(false);
+  // Brands in this look — flat list, no anchor concept
+  const [brandRows, setBrandRows] = useState<BrandRow[]>([]);
   const [isCollab, setIsCollab] = useState(false);
-  const [collabBrand, setCollabBrand] = useState<any>(null);
 
-  // ── Contributors / Brands featured (flexible rows) ──
+  // Contributors (people credits)
   const [contributors, setContributors] = useState<Contributor[]>([]);
-  const [brandCredits, setBrandCredits] = useState<BrandCredit[]>([]);
 
   const [event, setEvent] = useState<any>(null);
   const [scene, setScene] = useState("");
@@ -463,7 +370,7 @@ export default function IntakePage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successCount, setSuccessCount] = useState(0);
 
-  // ── Load all entities from Supabase on mount ──────────────────────────────
+  // Load entities
   useEffect(() => {
     async function loadEntities() {
       try {
@@ -487,7 +394,7 @@ export default function IntakePage() {
           setSourceNames(unique);
         }
       } catch (err) {
-        console.error("Failed to load entities, using seed data:", err);
+        console.error("Failed to load entities:", err);
       }
     }
     loadEntities();
@@ -498,39 +405,51 @@ export default function IntakePage() {
   const otherPlatforms = platforms.filter(p => p.id !== INSTAGRAM_ID && p.id !== BRAND_WEBSITE_ID);
   const cdRole = () => creditRoles.find(r => r.slug === "creative-director") || creditRoles[0];
 
-  // ── Entity creation helper ──
   async function post(path: string, data: any) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
       method: "POST",
-      headers: { ...H, "Prefer": "return=representation" },
+      headers: { ...H, Prefer: "return=representation" },
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error(await res.text());
     return (await res.json())[0];
   }
 
-  // Resolve the brand's known current creative director → add as a contributor row
-  async function selectBrand(b: any) {
-    setBrand(b);
-    if (b?.id && !b.id.startsWith("local-")) {
-      try {
-        const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/brand_directors?brand_id=eq.${b.id}&is_current=eq.true&select=person_id,people(id,name,primary_role)`,
-          { headers: H }
-        );
-        const rows = await res.json();
-        const directors = rows?.map((r: any) => r.people).filter(Boolean) || [];
-        if (directors.length > 0) {
-          const role = cdRole();
-          setContributors(prev => {
-            const additions = directors
-              .filter((d: any) => !prev.find(c => c.person?.id === d.id && c.role?.slug === "creative-director"))
-              .map((d: any) => ({ key: `cd-${d.id}-${Date.now()}`, role, person: d }));
-            return [...prev, ...additions];
-          });
-        }
-      } catch { /* skip */ }
-    }
+  // When a brand is added, auto-add its known current creative director as a contributor row
+  async function autoAddBrandCD(b: any) {
+    if (!b?.id || b.id.startsWith("local-")) return;
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/brand_directors?brand_id=eq.${b.id}&is_current=eq.true&select=person_id,people(id,name,primary_role)`,
+        { headers: H }
+      );
+      const rows = await res.json();
+      const directors = rows?.map((r: any) => r.people).filter(Boolean) || [];
+      if (directors.length > 0) {
+        const role = cdRole();
+        setContributors(prev => {
+          const additions = directors
+            .filter((d: any) => !prev.find(c => c.person?.id === d.id && c.role?.slug === "creative-director"))
+            .map((d: any) => ({ key: `cd-${d.id}-${Date.now()}`, role, person: d }));
+          return [...prev, ...additions];
+        });
+      }
+    } catch { /* skip */ }
+  }
+
+  // ── Brand row helpers ──
+  function addBrandRow() {
+    setBrandRows(prev => [...prev, { key: `b-${Date.now()}-${prev.length}`, brand: null, isCourtesy: false }]);
+  }
+  function updateBrandRow(key: string, brand: any) {
+    setBrandRows(prev => prev.map(b => b.key === key ? { ...b, brand } : b));
+    if (brand) autoAddBrandCD(brand);
+  }
+  function toggleBrandCourtesy(key: string) {
+    setBrandRows(prev => prev.map(b => b.key === key ? { ...b, isCourtesy: !b.isCourtesy } : b));
+  }
+  function removeBrandRow(key: string) {
+    setBrandRows(prev => prev.filter(b => b.key !== key));
   }
 
   // ── Contributor row helpers ──
@@ -547,26 +466,12 @@ export default function IntakePage() {
     setContributors(prev => prev.filter(c => c.key !== key));
   }
 
-  // ── Brand credit row helpers ──
-  function addBrandCredit() {
-    setBrandCredits(prev => [...prev, { key: `b-${Date.now()}-${prev.length}`, brand: null }]);
-  }
-  function updateBrandCredit(key: string, brand: any) {
-    setBrandCredits(prev => prev.map(b => b.key === key ? { ...b, brand } : b));
-  }
-  function removeBrandCredit(key: string) {
-    setBrandCredits(prev => prev.filter(b => b.key !== key));
-  }
-
-  // Fast role creation — slugify, POST to credit_roles, apply object to triggering row
+  // Fast role creation
   async function createRole(name: string, rowKey: string) {
     const slug = slugify(name);
     let created;
-    try {
-      created = await post("credit_roles", { name: name.trim().toLowerCase(), slug, sort_order: 999 });
-    } catch {
-      created = { id: `local-${Date.now()}`, name: name.trim().toLowerCase(), slug, sort_order: 999 };
-    }
+    try { created = await post("credit_roles", { name: name.trim().toLowerCase(), slug, sort_order: 999 }); }
+    catch { created = { id: `local-${Date.now()}`, name: name.trim().toLowerCase(), slug, sort_order: 999 }; }
     setCreditRoles(prev => [...prev, created].sort((a: any, b: any) => a.sort_order - b.sort_order));
     updateContributorRole(rowKey, created);
   }
@@ -575,17 +480,14 @@ export default function IntakePage() {
   async function handleCreateBrand(data: any) {
     let c; try { c = await post("brands", data); } catch { c = { ...data, id: `local-${Date.now()}` }; }
     setBrands(p => [...p, c].sort((a: any, b: any) => a.name.localeCompare(b.name)));
-    if (modal?.target === "collab") setCollabBrand(c);
-    else if (modal?.target?.startsWith("brandcredit:")) updateBrandCredit(modal.target.split(":")[1], c);
-    else await selectBrand(c);
+    if (modal?.target?.startsWith("brandrow:")) updateBrandRow(modal.target.split(":")[1], c);
     setModal(null);
   }
 
   async function handleCreatePerson(data: any) {
     let c; try { c = await post("people", data); } catch { c = { ...data, id: `local-${Date.now()}` }; }
     setPeople(p => [...p, c].sort((a: any, b: any) => a.name.localeCompare(b.name)));
-    if (modal?.target === "anchor-creator") setCreator(c);
-    else if (modal?.target?.startsWith("contributor:")) updateContributorPerson(modal.target.split(":")[1], c);
+    if (modal?.target?.startsWith("contributor:")) updateContributorPerson(modal.target.split(":")[1], c);
     setModal(null);
   }
 
@@ -612,14 +514,22 @@ export default function IntakePage() {
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
+  // Dual-write window (step 1→4 of Option A reset):
+  //   We still write looks.brand_id (the first valid brand row) and looks.courtesy_brand_id
+  //   alongside the new look_brand_credits rows. This keeps the safety net intact while public
+  //   reads are migrated. When step 4 drops the old columns, only the look_brand_credits
+  //   inserts below need to remain.
   async function handleSubmit() {
     if (!cdnUrl.trim()) { setStatus("error"); setErrorMsg("CDN image URL is required."); return; }
-    if (anchorMode === "brand" && !brand) { setStatus("error"); setErrorMsg("Select a brand, or switch to Independent Creator."); return; }
-    if (anchorMode === "creator" && !creator) { setStatus("error"); setErrorMsg("Select a creator, or switch to Brand."); return; }
     setStatus("submitting"); setErrorMsg("");
 
     const pid = customPlatform?.id?.startsWith("local-") ? null : (customPlatform?.id || platformId);
     const cleanId = (x: any) => (x?.id && !x.id.startsWith("local-") ? x.id : null);
+
+    // Valid brand rows: real (non-local) brands only, in row order
+    const validBrandRows = brandRows.filter(b => cleanId(b.brand));
+    const firstBrandId = validBrandRows[0] ? cleanId(validBrandRows[0].brand) : null;
+    const firstCourtesyBrandId = validBrandRows.find(b => b.isCourtesy) ? cleanId(validBrandRows.find(b => b.isCourtesy)!.brand) : null;
 
     const look = {
       source_url: sourceUrl.trim() || null,
@@ -627,9 +537,11 @@ export default function IntakePage() {
       source_name: sourceName.trim() || null,
       source_platform_id: pid,
       publication_id: cleanId(publication),
-      brand_id: anchorMode === "brand" ? cleanId(brand) : null,
-      creator_id: anchorMode === "creator" ? cleanId(creator) : null,
-      courtesy_brand_id: (anchorMode === "brand" && courtesy) ? cleanId(brand) : null,
+      // DUAL-WRITE: keep legacy columns in sync with look_brand_credits during the migration window
+      brand_id: firstBrandId,
+      courtesy_brand_id: firstCourtesyBrandId,
+      // is_collaboration is the one anchor-era flag we keep — it's a factual property of authorship
+      is_collaboration: isCollab,
       event_id: cleanId(event),
       scene: scene || "other",
       season_term: seasonTerm || null,
@@ -641,8 +553,6 @@ export default function IntakePage() {
       is_key_look: isKeyLook,
       status: "draft",
       notes: notes.trim() || null,
-      is_collaboration: anchorMode === "brand" ? isCollab : false,
-      collaboration_brand_id: (anchorMode === "brand" && isCollab) ? cleanId(collabBrand) : null,
     };
 
     try {
@@ -655,7 +565,23 @@ export default function IntakePage() {
       if (!res.ok) throw new Error(await res.text());
       const lookId = (await res.json())[0]?.id;
 
-      // Contributors → look_credits (role = credit_roles.name)
+      // Brands → look_brand_credits (new canonical home; all valid rows go here)
+      const brandCredits = validBrandRows.map((b, i) => ({
+        look_id: lookId,
+        brand_id: cleanId(b.brand)!,
+        role: null,
+        credit_order: i,
+        is_courtesy: b.isCourtesy,
+      }));
+      if (brandCredits.length > 0) {
+        await fetch(`${SUPABASE_URL}/rest/v1/look_brand_credits`, {
+          method: "POST",
+          headers: { ...H, "Prefer": "return=representation" },
+          body: JSON.stringify(brandCredits),
+        });
+      }
+
+      // Contributors → look_credits (people, with credit_roles.name as role)
       const credits = contributors
         .filter(c => c.person && !c.person.id?.startsWith("local-") && c.role)
         .map((c, i) => ({ look_id: lookId, person_id: c.person.id, role: c.role.name, credit_order: i }));
@@ -664,18 +590,6 @@ export default function IntakePage() {
           method: "POST",
           headers: { ...H, "Prefer": "return=representation" },
           body: JSON.stringify(credits),
-        });
-      }
-
-      // Brands featured → look_brand_credits (role null for now)
-      const bCredits = brandCredits
-        .filter(b => b.brand && !b.brand.id?.startsWith("local-"))
-        .map((b, i) => ({ look_id: lookId, brand_id: b.brand.id, role: null, credit_order: i }));
-      if (bCredits.length > 0) {
-        await fetch(`${SUPABASE_URL}/rest/v1/look_brand_credits`, {
-          method: "POST",
-          headers: { ...H, "Prefer": "return=representation" },
-          body: JSON.stringify(bCredits),
         });
       }
 
@@ -690,9 +604,8 @@ export default function IntakePage() {
 
   function resetForm() {
     setSourceUrl(""); setCdnUrl(""); setSourceName(""); setIsKeyLook(false);
-    setAnchorMode("brand"); setBrand(null); setCreator(null);
-    setContributors([]); setBrandCredits([]);
-    setCourtesy(false); setIsCollab(false); setCollabBrand(null);
+    setBrandRows([]); setIsCollab(false);
+    setContributors([]);
     setEvent(null); setScene(""); setSeasonTerm(""); setSeasonYear(""); setGender(""); setPublishDate("");
     setPhotoCity(null); setPhotoCountry(null); setNotes("");
     setPlatformId(INSTAGRAM_ID); setCustomPlatform(null); setPublication(null);
@@ -769,52 +682,43 @@ export default function IntakePage() {
           {/* ATTRIBUTION */}
           <Card title="Attribution">
 
-            {/* Anchor toggle */}
-            <F label="Anchor">
-              <div style={{ display: "flex", gap: 8 }}>
-                <button tabIndex={-1} style={{ ...s.tog, ...(anchorMode === "brand" ? s.togOn : {}) }}
-                  onClick={() => { setAnchorMode("brand"); setCreator(null); }}>Brand</button>
-                <button tabIndex={-1} style={{ ...s.tog, ...(anchorMode === "creator" ? s.togOn : {}) }}
-                  onClick={() => { setAnchorMode("creator"); setBrand(null); setCourtesy(false); setIsCollab(false); setCollabBrand(null); }}>Independent Creator</button>
+            {/* Brands (flat list) */}
+            <div style={s.field}>
+              <label style={s.label}>Brands</label>
+              <span style={{ fontSize: 12, color: C.dim, marginTop: -2 }}>One or more brands in this look. Check "Courtesy" when no photographer is identified.</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+                {brandRows.map(b => (
+                  <div key={b.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <InlineTypeahead
+                      items={brands}
+                      value={b.brand}
+                      onChange={(br: any) => updateBrandRow(b.key, br)}
+                      onClear={() => updateBrandRow(b.key, null)}
+                      placeholder="Search or create brand..."
+                      onCreateClick={(name: string) => setModal({ type: "brand", name, target: `brandrow:${b.key}` })}
+                    />
+                    <label style={{ ...s.ckLabel, fontSize: 13, color: b.brand ? C.text : C.dim, cursor: b.brand ? "pointer" : "default", whiteSpace: "nowrap" }}>
+                      <input type="checkbox" checked={b.isCourtesy} disabled={!b.brand} onChange={() => toggleBrandCourtesy(b.key)} style={s.ck} />
+                      Courtesy
+                    </label>
+                    <button tabIndex={-1} onClick={() => removeBrandRow(b.key)} style={s.rowX}>×</button>
+                  </div>
+                ))}
+                <button onClick={addBrandRow} style={s.addRow}>+ Add brand</button>
               </div>
-            </F>
+            </div>
 
-            {anchorMode === "brand" ? (
-              <>
-                <Typeahead label="Brand" items={brands} value={brand}
-                  onChange={selectBrand} onClear={() => { setBrand(null); setCourtesy(false); }}
-                  onCreateClick={(name: string) => setModal({ type: "brand", name, target: "anchor" })} />
+            {/* Collaboration */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <label style={s.ckLabel}>
+                <input type="checkbox" checked={isCollab} style={s.ck}
+                  onChange={e => setIsCollab(e.target.checked)} />
+                This is a collaboration
+              </label>
+              <span style={{ fontSize: 12, color: C.dim, fontStyle: "italic" }}>official co-creation between the brands above</span>
+            </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <label style={{ ...s.ckLabel, ...(brand ? {} : { color: C.dim, cursor: "default" }) }}>
-                    <input type="checkbox" checked={courtesy} disabled={!brand} style={s.ck}
-                      onChange={e => setCourtesy(e.target.checked)} />
-                    Courtesy of brand
-                  </label>
-                  {!brand && <span style={{ fontSize: 12, color: C.dim, fontStyle: "italic" }}>select a brand first</span>}
-                </div>
-
-                {/* Collaboration */}
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <label style={s.ckLabel}>
-                    <input type="checkbox" checked={isCollab} style={s.ck}
-                      onChange={e => { setIsCollab(e.target.checked); if (!e.target.checked) setCollabBrand(null); }} />
-                    This is a collaboration
-                  </label>
-                </div>
-                {isCollab && (
-                  <Typeahead label="Collaborating Brand" items={brands.filter((b: any) => b.id !== brand?.id)}
-                    value={collabBrand} onChange={setCollabBrand} onClear={() => setCollabBrand(null)}
-                    onCreateClick={(name: string) => setModal({ type: "brand", name, target: "collab" })} />
-                )}
-              </>
-            ) : (
-              <Typeahead label="Independent Creator" items={people} value={creator}
-                onChange={setCreator} onClear={() => setCreator(null)}
-                onCreateClick={(name: string) => setModal({ type: "person", name, role: "creative_director", target: "anchor-creator" })} />
-            )}
-
-            {/* ── Contributors ── */}
+            {/* Contributors */}
             <div style={s.field}>
               <label style={s.label}>Contributors</label>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -841,28 +745,6 @@ export default function IntakePage() {
                   </div>
                 ))}
                 <button onClick={addContributor} style={s.addRow}>+ Add contributor</button>
-              </div>
-            </div>
-
-            {/* ── Brands Featured ── */}
-            <div style={s.field}>
-              <label style={s.label}>Brands Featured</label>
-              <span style={{ fontSize: 12, color: C.dim, marginTop: -2 }}>Brands worn or featured in the look (separate from the anchor)</span>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
-                {brandCredits.map(b => (
-                  <div key={b.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <InlineTypeahead
-                      items={brands}
-                      value={b.brand}
-                      onChange={(br: any) => updateBrandCredit(b.key, br)}
-                      onClear={() => updateBrandCredit(b.key, null)}
-                      placeholder="Search or create brand..."
-                      onCreateClick={(name: string) => setModal({ type: "brand", name, target: `brandcredit:${b.key}` })}
-                    />
-                    <button tabIndex={-1} onClick={() => removeBrandCredit(b.key)} style={s.rowX}>×</button>
-                  </div>
-                ))}
-                <button onClick={addBrandCredit} style={s.addRow}>+ Add brand</button>
               </div>
             </div>
           </Card>
@@ -1018,7 +900,6 @@ const s: Record<string, any> = {
     fontSize: 20, cursor: "pointer", padding: 0, lineHeight: 1,
   },
 
-  // Row controls for contributor / brand-credit lists
   rowX: {
     background: "none", border: "none", color: C.muted,
     fontSize: 22, cursor: "pointer", padding: "0 4px", lineHeight: 1, flexShrink: 0,
