@@ -372,9 +372,23 @@ export default function ReviewQueue() {
   function toggleBrandCourtesy(key: string) { setBrandRows(prev => prev.map(b => b.key === key ? { ...b, isCourtesy: !b.isCourtesy } : b)); }
   function removeBrandRow(key: string) { setBrandRows(prev => prev.filter(b => b.key !== key)); }
 
-  function addContributor() { setContributors(prev => [...prev, { key: `c-new-${Date.now()}-${prev.length}`, role: cdRole(), person: null }]); }
+  function addContributor() {
+    // Start blank — name first, role auto-fills when person is selected
+    setContributors(prev => [...prev, { key: `c-new-${Date.now()}-${prev.length}`, role: null, person: null }]);
+  }
   function updateContributorRole(key: string, role: any) { setContributors(prev => prev.map(c => c.key === key ? { ...c, role } : c)); }
-  function updateContributorPerson(key: string, person: any) { setContributors(prev => prev.map(c => c.key === key ? { ...c, person } : c)); }
+  function updateContributorPerson(key: string, person: any) {
+    setContributors(prev => prev.map(c => {
+      if (c.key !== key) return c;
+      let role = c.role;
+      if (!role && person?.primary_role) {
+        const slug = person.primary_role.replace(/_/g, "-");
+        const match = creditRoles.find((r: any) => r.slug === slug);
+        if (match) role = match;
+      }
+      return { ...c, person, role };
+    }));
+  }
   function removeContributor(key: string) { setContributors(prev => prev.filter(c => c.key !== key)); }
 
   async function post(path: string, data: any) {
@@ -660,8 +674,8 @@ export default function ReviewQueue() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {contributors.map(c => (
                         <div key={c.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                          <Typeahead width={160} items={creditRoles} value={c.role} onChange={(r: any) => updateContributorRole(c.key, r)} onClear={() => updateContributorRole(c.key, null)} placeholder="Role..." onCreateClick={(name: string) => createRole(name, c.key)} />
                           <Typeahead items={people} value={c.person} onChange={(p: any) => updateContributorPerson(c.key, p)} onClear={() => updateContributorPerson(c.key, null)} placeholder="Search or create person..." onCreateClick={(name: string) => setPersonModal({ name, role: (c.role?.slug || "creative-director").replace(/-/g, "_"), target: `contributor:${c.key}` })} />
+                          <Typeahead width={160} items={creditRoles} value={c.role} onChange={(r: any) => updateContributorRole(c.key, r)} onClear={() => updateContributorRole(c.key, null)} placeholder="Role..." onCreateClick={(name: string) => createRole(name, c.key)} />
                           <button tabIndex={-1} onClick={() => removeContributor(c.key)} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer", padding: "0 4px", lineHeight: 1, flexShrink: 0 }}>×</button>
                         </div>
                       ))}
