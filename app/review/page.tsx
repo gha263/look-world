@@ -9,7 +9,6 @@ function slugify(str: string) {
 }
 
 // ── Typeahead (bare — sits inside grid cells / rows) ────────────────────────────
-// Signature intentionally matches Intake's InlineTypeahead for the future shared extraction.
 
 function Typeahead({ items, value, onChange, onClear, placeholder, onCreateClick, width }: any) {
   const [query, setQuery] = useState("");
@@ -69,7 +68,7 @@ function Typeahead({ items, value, onChange, onClear, placeholder, onCreateClick
   );
 }
 
-// ── Create person modal — website + role list from credit_roles, writes instagram_url ──
+// ── Modals (person + brand) — mirror Intake's shape ─────────────────────────────
 
 function CreatePersonModal({ initialName, role, roles, onSave, onClose }: any) {
   const [name, setName] = useState(initialName || "");
@@ -137,8 +136,6 @@ function CreatePersonModal({ initialName, role, roles, onSave, onClose }: any) {
   );
 }
 
-// ── Create brand modal ──────────────────────────────────────────────────────────
-
 function CreateBrandModal({ initialName, onSave, onClose }: any) {
   const [name, setName] = useState(initialName || "");
   const [ig, setIg] = useState("");
@@ -196,8 +193,6 @@ function CreateBrandModal({ initialName, onSave, onClose }: any) {
   );
 }
 
-// ── Field wrapper ──────────────────────────────────────────────────────────────
-
 function F({ label, children, span2 = false }: any) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5, gridColumn: span2 ? "1 / -1" : undefined }}>
@@ -206,8 +201,6 @@ function F({ label, children, span2 = false }: any) {
     </div>
   );
 }
-
-// ── Section header ─────────────────────────────────────────────────────────────
 
 function SectionHead({ title }: { title: string }) {
   return (
@@ -225,17 +218,19 @@ type Look = {
   scene: string | null; gender: string | null;
   season_display: string | null; season_term: string | null; season_year: number | null;
   date_published: string | null; is_key_look: boolean; notes: string | null;
-  created_at: string; brand_id: string | null; brand_name: string;
-  creator_id: string | null;
+  created_at: string;
+  is_collaboration: boolean;
   event_id: string | null; photo_city_id: string | null; photo_country_id: string | null;
-  courtesy_brand_id: string | null; is_collaboration: boolean; collaboration_brand_id: string | null;
   collection_title: string | null; collection_description: string | null;
   publication_id: string | null;
+  // Derived from look_brand_credits embed
+  brands_display: string;
+  brand_count: number;
   credit_count: number; tag_count: number;
 };
 
 type Contributor = { key: string; role: any; person: any };
-type BrandCredit = { key: string; brand: any };
+type BrandRow = { key: string; brand: any; isCourtesy: boolean };
 
 export default function ReviewQueue() {
   const [looks, setLooks] = useState<Look[]>([]);
@@ -247,7 +242,6 @@ export default function ReviewQueue() {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
 
-  // Entity lists
   const [brands, setBrands] = useState<any[]>([]);
   const [people, setPeople] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
@@ -255,10 +249,11 @@ export default function ReviewQueue() {
   const [platforms, setPlatforms] = useState<any[]>([]);
   const [creditRoles, setCreditRoles] = useState<any[]>([]);
 
-  // Edit state — look fields
-  const [anchorMode, setAnchorMode] = useState<"brand" | "creator">("brand");
-  const [editBrand, setEditBrand] = useState<any>(null);
-  const [editCreator, setEditCreator] = useState<any>(null);
+  // Edit state
+  const [brandRows, setBrandRows] = useState<BrandRow[]>([]);
+  const [editIsCollab, setEditIsCollab] = useState(false);
+  const [contributors, setContributors] = useState<Contributor[]>([]);
+
   const [editScene, setEditScene] = useState("");
   const [editGender, setEditGender] = useState("");
   const [editSeasonTerm, setEditSeasonTerm] = useState("");
@@ -276,15 +271,7 @@ export default function ReviewQueue() {
   const [editCollectionDesc, setEditCollectionDesc] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editKeyLook, setEditKeyLook] = useState(false);
-  const [editCourtesy, setEditCourtesy] = useState(false);
-  const [editIsCollab, setEditIsCollab] = useState(false);
-  const [editCollabBrand, setEditCollabBrand] = useState<any>(null);
 
-  // Edit state — flexible rows
-  const [contributors, setContributors] = useState<Contributor[]>([]);
-  const [brandCredits, setBrandCredits] = useState<BrandCredit[]>([]);
-
-  // Create modals — routed by target string
   const [personModal, setPersonModal] = useState<{name: string; role: string; target: string} | null>(null);
   const [brandModal, setBrandModal] = useState<{name: string; target: string} | null>(null);
 
@@ -307,6 +294,7 @@ export default function ReviewQueue() {
     } catch(e) { console.error(e); }
   };
 
+  // List query reads brands from look_brand_credits (no longer brand_id).
   const loadLooks = async () => {
     setLoading(true); setSelected(null); setLoadError(null);
     try {
@@ -317,44 +305,46 @@ export default function ReviewQueue() {
 
       const filter = statusFilter === "all" ? "" : `status=eq.${statusFilter}&`;
       const [data, tagCounts] = await Promise.all([
-        sb(`looks?${filter}select=id,status,cloudinary_url,source_url,source_name,source_platform_id,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,brand_id,creator_id,event_id,photo_city_id,photo_country_id,courtesy_brand_id,is_collaboration,collaboration_brand_id,collection_title,collection_description,publication_id,brand:brand_id(name),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`),
+        sb(`looks?${filter}select=id,status,cloudinary_url,source_url,source_name,source_platform_id,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,is_collaboration,event_id,photo_city_id,photo_country_id,collection_title,collection_description,publication_id,look_brand_credits(brand_id,credit_order,brands(name)),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`),
         sb(`entity_tags?entity_type=eq.look&select=entity_id`),
       ]);
 
       const tagCountMap: Record<string, number> = {};
       (tagCounts || []).forEach((t: any) => { tagCountMap[t.entity_id] = (tagCountMap[t.entity_id] || 0) + 1; });
 
-      setLooks(data.map((l: any) => ({
-        ...l,
-        brand_name: l.brand?.name || "",
-        credit_count: l.look_credits?.length || 0,
-        tag_count: tagCountMap[l.id] || 0,
-      })));
+      setLooks(data.map((l: any) => {
+        const rows = (l.look_brand_credits || []).slice().sort((a: any, b: any) => (a.credit_order ?? 0) - (b.credit_order ?? 0));
+        const names = rows.map((r: any) => r.brands?.name).filter(Boolean);
+        return {
+          ...l,
+          brands_display: l.is_collaboration && names.length >= 2 ? names.join(" × ") : names.join(", "),
+          brand_count: rows.length,
+          credit_count: l.look_credits?.length || 0,
+          tag_count: tagCountMap[l.id] || 0,
+        };
+      }));
     } catch(e: any) { console.error(e); setLoadError(e?.message || "Failed to load looks."); }
     setLoading(false);
   };
 
-  // Load existing credits → contributor rows, and brand credits → brand rows
-  const loadCredits = async (lookId: string) => {
-    const [credits, bCredits] = await Promise.all([
+  // Load brand rows from look_brand_credits, contributor rows from look_credits.
+  const loadDetail = async (lookId: string) => {
+    const [bRows, credits] = await Promise.all([
+      sb(`look_brand_credits?look_id=eq.${lookId}&select=id,brand_id,credit_order,is_courtesy,brands(id,name)&order=credit_order`),
       sb(`look_credits?look_id=eq.${lookId}&select=id,role,person_id,credit_order,people(id,name,primary_role)&order=credit_order`),
-      sb(`look_brand_credits?look_id=eq.${lookId}&select=id,brand_id,credit_order,brands(id,name)&order=credit_order`),
     ]);
-    // Map each credit's role string back to a credit_roles object (by name)
+    setBrandRows((bRows || [])
+      .filter((r: any) => r.brands)
+      .map((r: any, i: number) => ({ key: `b-${r.id}-${i}`, brand: r.brands, isCourtesy: !!r.is_courtesy })));
+
     const roleByName = (name: string) => creditRoles.find(r => r.name === name) || { id: `adhoc-${name}`, name, slug: slugify(name), sort_order: 999 };
     setContributors((credits || [])
       .filter((c: any) => c.people)
       .map((c: any, i: number) => ({ key: `c-${c.id}-${i}`, role: roleByName(c.role), person: c.people })));
-    setBrandCredits((bCredits || [])
-      .filter((b: any) => b.brands)
-      .map((b: any, i: number) => ({ key: `b-${b.id}-${i}`, brand: b.brands })));
   };
 
   const selectLook = (look: Look) => {
     setSelected(look);
-    setAnchorMode(look.creator_id ? "creator" : "brand");
-    setEditBrand(look.brand_id ? { id: look.brand_id, name: look.brand_name } : null);
-    setEditCreator(look.creator_id ? (people.find(p => p.id === look.creator_id) || { id: look.creator_id, name: look.creator_id }) : null);
     setEditScene(look.scene || "");
     setEditGender(look.gender || "");
     setEditSeasonTerm(look.season_term || "");
@@ -369,37 +359,23 @@ export default function ReviewQueue() {
     setEditCollectionDesc(look.collection_description || "");
     setEditNotes(look.notes || "");
     setEditKeyLook(look.is_key_look);
-    setEditCourtesy(!!look.courtesy_brand_id);
     setEditIsCollab(!!look.is_collaboration);
-    setEditCollabBrand(look.collaboration_brand_id ? (brands.find(b => b.id === look.collaboration_brand_id) || { id: look.collaboration_brand_id, name: look.collaboration_brand_id }) : null);
     setEditEvent(look.event_id ? events.find(e => e.id === look.event_id) || { id: look.event_id, name: look.event_id } : null);
     setEditPhotoCity(look.photo_city_id ? locations.find(l => l.id === look.photo_city_id) || null : null);
     setEditPhotoCountry(look.photo_country_id ? locations.find(l => l.id === look.photo_country_id) || null : null);
-    loadCredits(look.id);
+    loadDetail(look.id);
   };
 
   // ── Row helpers ──
-  function addContributor() {
-    setContributors(prev => [...prev, { key: `c-new-${Date.now()}-${prev.length}`, role: cdRole(), person: null }]);
-  }
-  function updateContributorRole(key: string, role: any) {
-    setContributors(prev => prev.map(c => c.key === key ? { ...c, role } : c));
-  }
-  function updateContributorPerson(key: string, person: any) {
-    setContributors(prev => prev.map(c => c.key === key ? { ...c, person } : c));
-  }
-  function removeContributor(key: string) {
-    setContributors(prev => prev.filter(c => c.key !== key));
-  }
-  function addBrandCredit() {
-    setBrandCredits(prev => [...prev, { key: `b-new-${Date.now()}-${prev.length}`, brand: null }]);
-  }
-  function updateBrandCredit(key: string, brand: any) {
-    setBrandCredits(prev => prev.map(b => b.key === key ? { ...b, brand } : b));
-  }
-  function removeBrandCredit(key: string) {
-    setBrandCredits(prev => prev.filter(b => b.key !== key));
-  }
+  function addBrandRow() { setBrandRows(prev => [...prev, { key: `b-new-${Date.now()}-${prev.length}`, brand: null, isCourtesy: false }]); }
+  function updateBrandRow(key: string, brand: any) { setBrandRows(prev => prev.map(b => b.key === key ? { ...b, brand } : b)); }
+  function toggleBrandCourtesy(key: string) { setBrandRows(prev => prev.map(b => b.key === key ? { ...b, isCourtesy: !b.isCourtesy } : b)); }
+  function removeBrandRow(key: string) { setBrandRows(prev => prev.filter(b => b.key !== key)); }
+
+  function addContributor() { setContributors(prev => [...prev, { key: `c-new-${Date.now()}-${prev.length}`, role: cdRole(), person: null }]); }
+  function updateContributorRole(key: string, role: any) { setContributors(prev => prev.map(c => c.key === key ? { ...c, role } : c)); }
+  function updateContributorPerson(key: string, person: any) { setContributors(prev => prev.map(c => c.key === key ? { ...c, person } : c)); }
+  function removeContributor(key: string) { setContributors(prev => prev.filter(c => c.key !== key)); }
 
   async function post(path: string, data: any) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -409,7 +385,6 @@ export default function ReviewQueue() {
     return (await res.json())[0];
   }
 
-  // Fast role creation
   async function createRole(name: string, rowKey: string) {
     const slug = slugify(name);
     let created;
@@ -419,15 +394,24 @@ export default function ReviewQueue() {
     updateContributorRole(rowKey, created);
   }
 
+  // Save: delete-and-reinsert both credit tables; dual-write the legacy columns on looks
+  // so the safety net stays in sync until step 4 drops them.
   const saveEdits = async () => {
     if (!selected) return;
     setSaving(true);
     try {
+      const validBrandRows = brandRows.filter(b => b.brand?.id);
+      const firstBrandId = validBrandRows[0]?.brand.id || null;
+      const firstCourtesy = validBrandRows.find(b => b.isCourtesy)?.brand.id || null;
+
       await sb(`looks?id=eq.${selected.id}`, {
         method: "PATCH", prefer: "",
         body: JSON.stringify({
-          brand_id: anchorMode === "brand" ? (editBrand?.id || null) : null,
-          creator_id: anchorMode === "creator" ? (editCreator?.id || null) : null,
+          // DUAL-WRITE: keep legacy columns in sync during the migration window
+          brand_id: firstBrandId,
+          courtesy_brand_id: firstCourtesy,
+          is_collaboration: editIsCollab,
+          // The rest of the look's properties
           scene: editScene || null,
           gender: editGender || null,
           season_term: editSeasonTerm || null,
@@ -445,28 +429,25 @@ export default function ReviewQueue() {
           collection_description: editCollectionDesc || null,
           notes: editNotes || null,
           is_key_look: editKeyLook,
-          courtesy_brand_id: (anchorMode === "brand" && editCourtesy) ? (editBrand?.id || null) : null,
-          is_collaboration: anchorMode === "brand" ? editIsCollab : false,
-          collaboration_brand_id: (anchorMode === "brand" && editIsCollab) ? (editCollabBrand?.id || null) : null,
         }),
       });
 
-      // Contributors: delete-and-reinsert
+      // Brand credits: delete-and-reinsert
+      await sb(`look_brand_credits?look_id=eq.${selected.id}`, { method: "DELETE", prefer: "" });
+      const newBrandCredits = validBrandRows.map((b, i) => ({
+        look_id: selected.id, brand_id: b.brand.id, role: null, credit_order: i, is_courtesy: b.isCourtesy,
+      }));
+      if (newBrandCredits.length > 0) {
+        await sb("look_brand_credits", { method: "POST", body: JSON.stringify(newBrandCredits) });
+      }
+
+      // Person credits: delete-and-reinsert
       await sb(`look_credits?look_id=eq.${selected.id}`, { method: "DELETE", prefer: "" });
       const newCredits = contributors
         .filter(c => c.person?.id && c.role)
         .map((c, i) => ({ look_id: selected.id, person_id: c.person.id, role: c.role.name, credit_order: i }));
       if (newCredits.length > 0) {
         await sb("look_credits", { method: "POST", body: JSON.stringify(newCredits) });
-      }
-
-      // Brands featured: delete-and-reinsert
-      await sb(`look_brand_credits?look_id=eq.${selected.id}`, { method: "DELETE", prefer: "" });
-      const newBrandCredits = brandCredits
-        .filter(b => b.brand?.id)
-        .map((b, i) => ({ look_id: selected.id, brand_id: b.brand.id, role: null, credit_order: i }));
-      if (newBrandCredits.length > 0) {
-        await sb("look_brand_credits", { method: "POST", body: JSON.stringify(newBrandCredits) });
       }
 
       await loadLooks();
@@ -498,7 +479,7 @@ export default function ReviewQueue() {
 
   const missingFields = (look: Look) => {
     const m = [];
-    if (!look.brand_name && !look.creator_id) m.push("anchor");
+    if (look.brand_count === 0) m.push("brands");
     if (!look.scene) m.push("scene");
     if (!look.gender) m.push("gender");
     if (!look.season_year) m.push("season");
@@ -513,7 +494,7 @@ export default function ReviewQueue() {
   const sel = { ...inp, cursor: "pointer" as const };
 
   const filteredLooks = search.trim()
-    ? looks.filter(l => l.brand_name.toLowerCase().includes(search.toLowerCase()) || (l.source_name || "").toLowerCase().includes(search.toLowerCase()))
+    ? looks.filter(l => l.brands_display.toLowerCase().includes(search.toLowerCase()) || (l.source_name || "").toLowerCase().includes(search.toLowerCase()))
     : looks;
 
   return (
@@ -577,7 +558,7 @@ export default function ReviewQueue() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.lift1}` }}>
-                    {["Image","Brand","Scene","Season","Credits","Tags","Missing","Status",""].map(h => (
+                    {["Image","Brands","Scene","Season","Credits","Tags","Missing","Status",""].map(h => (
                       <th key={h} style={{ padding: "8px 10px", fontSize: 11, fontWeight: 600, color: C.muted, textAlign: "left", letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
@@ -595,9 +576,9 @@ export default function ReviewQueue() {
                             ? <img src={look.cloudinary_url} alt="" style={{ width: 40, height: 48, objectFit: "cover", borderRadius: 4, display: "block" }} />
                             : <div style={{ width: 40, height: 48, background: C.lift2, borderRadius: 4 }} />}
                         </td>
-                        <td style={{ padding: "6px 10px", maxWidth: 130 }}>
-                          <div style={{ fontSize: 13, fontWeight: 500, color: look.brand_name ? C.text : C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{look.brand_name || (look.creator_id ? "(creator)" : "—")}</div>
-                          {look.source_name && !look.brand_name && <div style={{ fontSize: 11, color: C.muted }}>{look.source_name}</div>}
+                        <td style={{ padding: "6px 10px", maxWidth: 160 }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: look.brands_display ? C.text : C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{look.brands_display || "—"}</div>
+                          {look.source_name && !look.brands_display && <div style={{ fontSize: 11, color: C.muted }}>{look.source_name}</div>}
                         </td>
                         <td style={{ padding: "6px 10px" }}><span style={{ fontSize: 12, color: look.scene ? C.text : C.dim }}>{look.scene || "—"}</span></td>
                         <td style={{ padding: "6px 10px", whiteSpace: "nowrap" }}><span style={{ fontSize: 12, color: look.season_display ? C.text : C.dim }}>{look.season_display || (look.season_year?.toString()) || "—"}</span></td>
@@ -629,7 +610,6 @@ export default function ReviewQueue() {
           {selected && (
             <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
 
-              {/* Image */}
               <div style={{ position: "relative", background: "#181818", flexShrink: 0 }}>
                 <img src={selected.cloudinary_url} alt="" style={{ width: "100%", maxHeight: 320, objectFit: "contain", display: "block" }} />
                 <button onClick={() => setSelected(null)}
@@ -640,7 +620,6 @@ export default function ReviewQueue() {
                 )}
               </div>
 
-              {/* Fields */}
               <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
 
                 <div style={{ fontSize: 12, color: C.muted }}>
@@ -649,48 +628,32 @@ export default function ReviewQueue() {
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
 
-                  {/* ATTRIBUTION */}
                   <SectionHead title="Attribution" />
 
-                  {/* Anchor toggle */}
-                  <F label="Anchor" span2>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button tabIndex={-1} onClick={() => { setAnchorMode("brand"); setEditCreator(null); }}
-                        style={{ height: 36, padding: "0 16px", border: "none", borderRadius: 18, background: anchorMode==="brand" ? C.white : C.lift2, color: anchorMode==="brand" ? "#212121" : C.muted, fontSize: 13, fontWeight: anchorMode==="brand" ? 600 : 500, cursor: "pointer", fontFamily: "Inter,sans-serif" }}>Brand</button>
-                      <button tabIndex={-1} onClick={() => { setAnchorMode("creator"); setEditBrand(null); setEditCourtesy(false); setEditIsCollab(false); setEditCollabBrand(null); }}
-                        style={{ height: 36, padding: "0 16px", border: "none", borderRadius: 18, background: anchorMode==="creator" ? C.white : C.lift2, color: anchorMode==="creator" ? "#212121" : C.muted, fontSize: 13, fontWeight: anchorMode==="creator" ? 600 : 500, cursor: "pointer", fontFamily: "Inter,sans-serif" }}>Independent Creator</button>
+                  {/* Brands — flat list with is_courtesy per row */}
+                  <F label="Brands" span2>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {brandRows.map(b => (
+                        <div key={b.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <Typeahead items={brands} value={b.brand} onChange={(br: any) => updateBrandRow(b.key, br)} onClear={() => updateBrandRow(b.key, null)} placeholder="Search or create brand..." onCreateClick={(name: string) => setBrandModal({ name, target: `brandrow:${b.key}` })} />
+                          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: b.brand ? C.text : C.dim, cursor: b.brand ? "pointer" : "default", whiteSpace: "nowrap", userSelect: "none" }}>
+                            <input type="checkbox" checked={b.isCourtesy} disabled={!b.brand} onChange={() => toggleBrandCourtesy(b.key)} style={{ accentColor: C.white, cursor: "pointer" }} />
+                            Courtesy
+                          </label>
+                          <button tabIndex={-1} onClick={() => removeBrandRow(b.key)} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer", padding: "0 4px", lineHeight: 1, flexShrink: 0 }}>×</button>
+                        </div>
+                      ))}
+                      <button onClick={addBrandRow} style={{ alignSelf: "flex-start", background: "transparent", border: `1.5px dashed ${C.lift3}`, color: C.muted, padding: "7px 14px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif" }}>+ Add brand</button>
                     </div>
                   </F>
 
-                  {anchorMode === "brand" ? (
-                    <>
-                      <F label="Brand" span2>
-                        <Typeahead items={brands} value={editBrand} onChange={setEditBrand} onClear={() => { setEditBrand(null); setEditCourtesy(false); }} placeholder="Search or create brand..." onCreateClick={(name: string) => setBrandModal({ name, target: "anchor" })} />
-                      </F>
-                      <F label="" span2>
-                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: editBrand?"pointer":"default", fontSize: 13, color: editBrand ? C.text : C.dim, userSelect: "none" }}>
-                          <input type="checkbox" checked={editCourtesy} disabled={!editBrand} onChange={e => setEditCourtesy(e.target.checked)} style={{ accentColor: C.white, cursor: "pointer" }} />
-                          Courtesy of brand
-                          {!editBrand && <span style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>— select a brand first</span>}
-                        </label>
-                      </F>
-                      <F label="" span2>
-                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.text, userSelect: "none" }}>
-                          <input type="checkbox" checked={editIsCollab} onChange={e => { setEditIsCollab(e.target.checked); if (!e.target.checked) setEditCollabBrand(null); }} style={{ accentColor: C.white, cursor: "pointer" }} />
-                          This is a collaboration
-                        </label>
-                      </F>
-                      {editIsCollab && (
-                        <F label="Collaborating Brand" span2>
-                          <Typeahead items={brands.filter((b: any) => b.id !== editBrand?.id)} value={editCollabBrand} onChange={setEditCollabBrand} onClear={() => setEditCollabBrand(null)} placeholder="Search or create brand..." onCreateClick={(name: string) => setBrandModal({ name, target: "collab" })} />
-                        </F>
-                      )}
-                    </>
-                  ) : (
-                    <F label="Independent Creator" span2>
-                      <Typeahead items={people} value={editCreator} onChange={setEditCreator} onClear={() => setEditCreator(null)} placeholder="Search or create person..." onCreateClick={(name: string) => setPersonModal({ name, role: "creative_director", target: "anchor-creator" })} />
-                    </F>
-                  )}
+                  <F label="" span2>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.text, userSelect: "none" }}>
+                      <input type="checkbox" checked={editIsCollab} onChange={e => setEditIsCollab(e.target.checked)} style={{ accentColor: C.white, cursor: "pointer" }} />
+                      This is a collaboration
+                      <span style={{ fontSize: 11, color: C.dim, fontStyle: "italic", marginLeft: 4 }}>— official co-creation between the brands above</span>
+                    </label>
+                  </F>
 
                   {/* Contributors */}
                   <F label="Contributors" span2>
@@ -706,20 +669,6 @@ export default function ReviewQueue() {
                     </div>
                   </F>
 
-                  {/* Brands Featured */}
-                  <F label="Brands Featured" span2>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {brandCredits.map(b => (
-                        <div key={b.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                          <Typeahead items={brands} value={b.brand} onChange={(br: any) => updateBrandCredit(b.key, br)} onClear={() => updateBrandCredit(b.key, null)} placeholder="Search or create brand..." onCreateClick={(name: string) => setBrandModal({ name, target: `brandcredit:${b.key}` })} />
-                          <button tabIndex={-1} onClick={() => removeBrandCredit(b.key)} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer", padding: "0 4px", lineHeight: 1, flexShrink: 0 }}>×</button>
-                        </div>
-                      ))}
-                      <button onClick={addBrandCredit} style={{ alignSelf: "flex-start", background: "transparent", border: `1.5px dashed ${C.lift3}`, color: C.muted, padding: "7px 14px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif" }}>+ Add brand</button>
-                    </div>
-                  </F>
-
-                  {/* CONTEXT */}
                   <SectionHead title="Context" />
 
                   <F label="Scene">
@@ -775,7 +724,6 @@ export default function ReviewQueue() {
                     </label>
                   </F>
 
-                  {/* LOCATION */}
                   <SectionHead title="Photo Location" />
 
                   <F label="City">
@@ -786,7 +734,6 @@ export default function ReviewQueue() {
                     <Typeahead items={countries} value={editPhotoCountry} onChange={setEditPhotoCountry} onClear={() => setEditPhotoCountry(null)} placeholder="Search country..." />
                   </F>
 
-                  {/* SOURCE */}
                   <SectionHead title="Source" />
 
                   <F label="Source Platform" span2>
@@ -809,7 +756,6 @@ export default function ReviewQueue() {
                     <Typeahead items={platforms} value={editPublication} onChange={setEditPublication} onClear={() => setEditPublication(null)} placeholder="e.g. Vogue, i-D, Dazed..." />
                   </F>
 
-                  {/* COLLECTION */}
                   <SectionHead title="Collection" />
 
                   <F label="Collection Title" span2>
@@ -820,7 +766,6 @@ export default function ReviewQueue() {
                     <textarea value={editCollectionDesc} onChange={e => setEditCollectionDesc(e.target.value)} rows={3} placeholder="Editorial narrative about this collection..." style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
                   </F>
 
-                  {/* NOTES */}
                   <SectionHead title="Notes" />
 
                   <F label="" span2>
@@ -828,7 +773,6 @@ export default function ReviewQueue() {
                   </F>
                 </div>
 
-                {/* Missing fields */}
                 {missingFields(selected).length > 0 && (
                   <div style={{ background: "#2a1f0a", border: "1px solid #5a3a0a", borderRadius: 10, padding: "10px 14px" }}>
                     <div style={{ fontSize: 12, color: C.amber, fontWeight: 600, marginBottom: 3 }}>Missing fields</div>
@@ -836,7 +780,6 @@ export default function ReviewQueue() {
                   </div>
                 )}
 
-                {/* Actions */}
                 <div style={{ display: "flex", gap: 10, paddingBottom: 20 }}>
                   <button onClick={saveEdits} disabled={saving}
                     style={{ background: C.white, border: "none", color: "#212121", padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
@@ -861,7 +804,6 @@ export default function ReviewQueue() {
         </div>
       </div>
 
-      {/* Modals */}
       {personModal && (
         <CreatePersonModal
           initialName={personModal.name}
@@ -870,8 +812,7 @@ export default function ReviewQueue() {
           onClose={() => setPersonModal(null)}
           onSave={(created: any) => {
             setPeople(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-            if (personModal.target === "anchor-creator") setEditCreator(created);
-            else if (personModal.target.startsWith("contributor:")) updateContributorPerson(personModal.target.split(":")[1], created);
+            if (personModal.target.startsWith("contributor:")) updateContributorPerson(personModal.target.split(":")[1], created);
             setPersonModal(null);
           }}
         />
@@ -883,9 +824,7 @@ export default function ReviewQueue() {
           onClose={() => setBrandModal(null)}
           onSave={(created: any) => {
             setBrands(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-            if (brandModal.target === "anchor") setEditBrand(created);
-            else if (brandModal.target === "collab") setEditCollabBrand(created);
-            else if (brandModal.target.startsWith("brandcredit:")) updateBrandCredit(brandModal.target.split(":")[1], created);
+            if (brandModal.target.startsWith("brandrow:")) updateBrandRow(brandModal.target.split(":")[1], created);
             setBrandModal(null);
           }}
         />
