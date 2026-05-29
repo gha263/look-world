@@ -454,13 +454,26 @@ export default function IntakePage() {
 
   // ── Contributor row helpers ──
   function addContributor() {
-    setContributors(prev => [...prev, { key: `c-${Date.now()}-${prev.length}`, role: cdRole(), person: null }]);
+    // Start blank — name first, role auto-fills when person is selected
+    setContributors(prev => [...prev, { key: `c-${Date.now()}-${prev.length}`, role: null, person: null }]);
   }
   function updateContributorRole(key: string, role: any) {
     setContributors(prev => prev.map(c => c.key === key ? { ...c, role } : c));
   }
   function updateContributorPerson(key: string, person: any) {
-    setContributors(prev => prev.map(c => c.key === key ? { ...c, person } : c));
+    setContributors(prev => prev.map(c => {
+      if (c.key !== key) return c;
+      // Auto-fill role from person's primary_role if role slot is currently empty.
+      // Maps primary_role underscore format (e.g. "creative_director") to a credit_roles
+      // object by matching slug hyphen format (e.g. "creative-director"). Stays editable after.
+      let role = c.role;
+      if (!role && person?.primary_role) {
+        const slug = person.primary_role.replace(/_/g, "-");
+        const match = creditRoles.find((r: any) => r.slug === slug);
+        if (match) role = match;
+      }
+      return { ...c, person, role };
+    }));
   }
   function removeContributor(key: string) {
     setContributors(prev => prev.filter(c => c.key !== key));
@@ -725,6 +738,14 @@ export default function IntakePage() {
                 {contributors.map(c => (
                   <div key={c.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <InlineTypeahead
+                      items={people}
+                      value={c.person}
+                      onChange={(p: any) => updateContributorPerson(c.key, p)}
+                      onClear={() => updateContributorPerson(c.key, null)}
+                      placeholder="Search or create person..."
+                      onCreateClick={(name: string) => setModal({ type: "person", name, role: (c.role?.slug || "creative-director").replace(/-/g, "_"), target: `contributor:${c.key}` })}
+                    />
+                    <InlineTypeahead
                       width={180}
                       items={creditRoles}
                       value={c.role}
@@ -732,14 +753,6 @@ export default function IntakePage() {
                       onClear={() => updateContributorRole(c.key, null)}
                       placeholder="Role..."
                       onCreateClick={(name: string) => createRole(name, c.key)}
-                    />
-                    <InlineTypeahead
-                      items={people}
-                      value={c.person}
-                      onChange={(p: any) => updateContributorPerson(c.key, p)}
-                      onClear={() => updateContributorPerson(c.key, null)}
-                      placeholder="Search or create person..."
-                      onCreateClick={(name: string) => setModal({ type: "person", name, role: (c.role?.slug || "creative-director").replace(/-/g, "_"), target: `contributor:${c.key}` })}
                     />
                     <button tabIndex={-1} onClick={() => removeContributor(c.key)} style={s.rowX}>×</button>
                   </div>
