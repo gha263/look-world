@@ -527,11 +527,8 @@ export default function IntakePage() {
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
-  // Dual-write window (step 1→4 of Option A reset):
-  //   We still write looks.brand_id (the first valid brand row) and looks.courtesy_brand_id
-  //   alongside the new look_brand_credits rows. This keeps the safety net intact while public
-  //   reads are migrated. When step 4 drops the old columns, only the look_brand_credits
-  //   inserts below need to remain.
+  // Brands attach exclusively through look_brand_credits. The legacy looks.brand_id /
+  // courtesy_brand_id / collaboration_brand_id columns were dropped in Option A step 4b.
   async function handleSubmit() {
     if (!cdnUrl.trim()) { setStatus("error"); setErrorMsg("CDN image URL is required."); return; }
     setStatus("submitting"); setErrorMsg("");
@@ -541,8 +538,6 @@ export default function IntakePage() {
 
     // Valid brand rows: real (non-local) brands only, in row order
     const validBrandRows = brandRows.filter(b => cleanId(b.brand));
-    const firstBrandId = validBrandRows[0] ? cleanId(validBrandRows[0].brand) : null;
-    const firstCourtesyBrandId = validBrandRows.find(b => b.isCourtesy) ? cleanId(validBrandRows.find(b => b.isCourtesy)!.brand) : null;
 
     const look = {
       source_url: sourceUrl.trim() || null,
@@ -550,10 +545,9 @@ export default function IntakePage() {
       source_name: sourceName.trim() || null,
       source_platform_id: pid,
       publication_id: cleanId(publication),
-      // DUAL-WRITE: keep legacy columns in sync with look_brand_credits during the migration window
-      brand_id: firstBrandId,
-      courtesy_brand_id: firstCourtesyBrandId,
-      // is_collaboration is the one anchor-era flag we keep — it's a factual property of authorship
+      // Brands attach exclusively through look_brand_credits (Option A reset, step 4b).
+      // is_collaboration stays on looks — it's a factual property of authorship that
+      // can't be derived from the credits layer.
       is_collaboration: isCollab,
       event_id: cleanId(event),
       scene: scene || "other",
