@@ -415,15 +415,12 @@ export default function ReviewQueue() {
     setSaving(true);
     try {
       const validBrandRows = brandRows.filter(b => b.brand?.id);
-      const firstBrandId = validBrandRows[0]?.brand.id || null;
-      const firstCourtesy = validBrandRows.find(b => b.isCourtesy)?.brand.id || null;
 
       await sb(`looks?id=eq.${selected.id}`, {
         method: "PATCH", prefer: "",
         body: JSON.stringify({
-          // DUAL-WRITE: keep legacy columns in sync during the migration window
-          brand_id: firstBrandId,
-          courtesy_brand_id: firstCourtesy,
+          // Brands attach exclusively through look_brand_credits (Option A reset, step 4b).
+          // is_collaboration stays — factual property of authorship, can't be derived.
           is_collaboration: editIsCollab,
           // The rest of the look's properties
           scene: editScene || null,
