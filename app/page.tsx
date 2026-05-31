@@ -188,12 +188,13 @@ export default function TagStudio() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [l, b, t, tagged] = await Promise.all([
+      const [l, b, t, humanTagged, aiTagged] = await Promise.all([
         sb("looks?select=id,cloudinary_url,caption,brand_id,season_display,source_url,notes,status,created_at&order=brand_id,created_at&limit=2000"),
         sb("brands?select=id,name&order=name"),
         sb("tags?select=*&order=tag_type,name"),
-        // Include both human and AI-approved for "tagged" tracking
-        sb("entity_tags?entity_type=eq.look&select=entity_id,source,status"),
+        // Two separate queries to avoid row limit issues on large tables
+        sb("entity_tags?entity_type=eq.look&source=eq.human&select=entity_id&limit=10000"),
+        sb("entity_tags?entity_type=eq.look&source=eq.ai&status=eq.approved&select=entity_id&limit=10000"),
       ]);
       const brandMap: Record<string,string> = {};
       b.forEach((br: any) => { brandMap[br.id] = br.name; });
@@ -204,11 +205,10 @@ export default function TagStudio() {
         acc[tag.tag_type].push(tag);
         return acc;
       }, {});
-      const taggedSet = new Set<string>(
-        (tagged || [])
-          .filter((r: any) => r.source === "human" || (r.source === "ai" && r.status === "approved"))
-          .map((r: any) => r.entity_id as string)
-      );
+      const taggedSet = new Set<string>([
+        ...(humanTagged || []).map((r: any) => r.entity_id as string),
+        ...(aiTagged || []).map((r: any) => r.entity_id as string),
+      ]);
       setLooks(looksWithBrand);
       setFiltered(looksWithBrand);
       setBrands(b);
