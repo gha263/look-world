@@ -22,6 +22,8 @@ export default function TagStudio() {
   const [tagsByType, setTagsByType] = useState<Record<string,any[]>>({});
   const [idx, setIdx] = useState(() => { try { return parseInt(localStorage.getItem("ts_idx") || "0") || 0; } catch { return 0; } });
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
+  const [humanTagIds, setHumanTagIds] = useState<Set<string>>(new Set());
+  const [aiApprovedTagIds, setAiApprovedTagIds] = useState<Set<string>>(new Set());
   const [primaryTagId, setPrimaryTagId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -49,11 +51,9 @@ export default function TagStudio() {
   // ── Browse mode ──────────────────────────────────────────────────────────────
   const [browseMode, setBrowseMode] = useState(false);
   const [browseTagIds, setBrowseTagIds] = useState<Set<string>>(new Set());
-  // Cache: tagId → Set<lookId>
   const [lookIdCache, setLookIdCache] = useState<Record<string, Set<string>>>({});
   const [browseScrollPos, setBrowseScrollPos] = useState(0);
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set(["color"]));
-  // tagCounts: tagId → number, loaded lazily
   const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
   const [loadingCounts, setLoadingCounts] = useState<Set<string>>(new Set());
 
@@ -135,7 +135,6 @@ export default function TagStudio() {
     if (next.has(type)) { next.delete(type); setExpandedTypes(next); return; }
     next.add(type);
     setExpandedTypes(next);
-    // Fetch counts for uncached tags in this category
     const tags = (tagsByType[type] || []).filter((t: any) => tagCounts[t.id] === undefined);
     if (tags.length === 0) return;
     setLoadingCounts(prev => { const s = new Set(prev); tags.forEach((t: any) => s.add(t.id)); return s; });
@@ -150,7 +149,7 @@ export default function TagStudio() {
     if (browseTagIds.size === 0) return looks;
     const selectedIds = Array.from(browseTagIds);
     const sets = selectedIds.map(tid => lookIdCache[tid]).filter(Boolean);
-    if (sets.length !== selectedIds.length) return looks; // still fetching
+    if (sets.length !== selectedIds.length) return looks;
     return looks.filter(l => sets.every(s => s.has(l.id)));
   })();
 
@@ -193,7 +192,8 @@ export default function TagStudio() {
         sb("looks?select=id,cloudinary_url,caption,brand_id,season_display,source_url,notes,status,created_at&order=brand_id,created_at&limit=2000"),
         sb("brands?select=id,name&order=name"),
         sb("tags?select=*&order=tag_type,name"),
-        sb("entity_tags?entity_type=eq.look&source=eq.human&select=entity_id"),
+        // Include both human and AI-approved for "tagged" tracking
+        sb("entity_tags?entity_type=eq.look&select=entity_id,source,status"),
       ]);
       const brandMap: Record<string,string> = {};
       b.forEach((br: any) => { brandMap[br.id] = br.name; });
@@ -204,7 +204,11 @@ export default function TagStudio() {
         acc[tag.tag_type].push(tag);
         return acc;
       }, {});
-      const taggedSet = new Set<string>((tagged || []).map((r: any) => r.entity_id as string));
+      const taggedSet = new Set<string>(
+        (tagged || [])
+          .filter((r: any) => r.source === "human" || (r.source === "ai" && r.status === "approved"))
+          .map((r: any) => r.entity_id as string)
+      );
       setLooks(looksWithBrand);
       setFiltered(looksWithBrand);
       setBrands(b);
@@ -215,8 +219,18 @@ export default function TagStudio() {
   };
 
   const loadTags = async (lookId: string) => {
-    const data = await sb(`entity_tags?entity_id=eq.${lookId}&entity_type=eq.look&source=eq.human&select=tag_id,is_primary`);
-    setActiveTags(new Set(data.map((t: any) => t.tag_id)));
+    const data = await sb(
+      `entity_tags?entity_id=eq.${lookId}&entity_type=eq.look&select=tag_id,is_primary,source,status`
+    );
+    const human = new Set<string>(
+      data.filter((t: any) => t.source === "human").map((t: any) => t.tag_id)
+    );
+    const aiApproved = new Set<string>(
+      data.filter((t: any) => t.source === "ai" && t.status === "approved").map((t: any) => t.tag_id)
+    );
+    setHumanTagIds(human);
+    setAiApprovedTagIds(aiApproved);
+    setActiveTags(new Set<string>([...human, ...aiApproved]));
     const primary = data.find((t: any) => t.is_primary);
     setPrimaryTagId(primary?.tag_id || null);
   };
@@ -225,24 +239,71 @@ export default function TagStudio() {
     const look = filtered[idx];
     if (!look) return;
     setSaving(true);
-    const next = new Set(activeTags);
     try {
-      if (next.has(tagId)) {
-        next.delete(tagId);
+      const isHuman = humanTagIds.has(tagId);
+      const isAI = aiApprovedTagIds.has(tagId);
+
+      if (isHuman) {
+        // Remove human source — if AI-approved exists, tag stays active (AI-only)
+        await sb(
+          `entity_tags?entity_id=eq.${look.id}&tag_id=eq.${tagId}&entity_type=eq.look&source=eq.human`,
+          { method: "DELETE", prefer: "" }
+        );
+        const newHuman = new Set(humanTagIds);
+        newHuman.delete(tagId);
+        setHumanTagIds(newHuman);
         if (primaryTagId === tagId) setPrimaryTagId(null);
-        await sb(`entity_tags?entity_id=eq.${look.id}&tag_id=eq.${tagId}&entity_type=eq.look&source=eq.human`, { method:"DELETE", prefer:"" });
-        setTagCounts(prev => ({ ...prev, [tagId]: Math.max(0, (prev[tagId] ?? 1) - 1) }));
-        setLookIdCache(prev => {
-          if (!prev[tagId]) return prev;
-          const s = new Set(prev[tagId]); s.delete(look.id);
-          return { ...prev, [tagId]: s };
-        });
-        if (tagFilterId === tagId) {
-          setTagFilterLookIds(prev => { if (!prev) return prev; const s = new Set(prev); s.delete(look.id); return s; });
+
+        if (!isAI) {
+          // No AI fallback — remove entirely from active
+          const next = new Set(activeTags);
+          next.delete(tagId);
+          setActiveTags(next);
+          setTagCounts(prev => ({ ...prev, [tagId]: Math.max(0, (prev[tagId] ?? 1) - 1) }));
+          setLookIdCache(prev => {
+            if (!prev[tagId]) return prev;
+            const s = new Set(prev[tagId]); s.delete(look.id);
+            return { ...prev, [tagId]: s };
+          });
+          if (tagFilterId === tagId) {
+            setTagFilterLookIds(prev => {
+              if (!prev) return prev;
+              const s = new Set(prev); s.delete(look.id); return s;
+            });
+          }
+          setTaggedLookIds(prev => {
+            const s = new Set(prev);
+            if (newHuman.size === 0) s.delete(look.id);
+            return s;
+          });
         }
+        // If AI exists: stays in activeTags, just loses human badge — no other updates needed
+
+      } else if (isAI) {
+        // AI-only — promote to human (confirm it)
+        await sb("entity_tags", {
+          method: "POST",
+          body: JSON.stringify({ entity_id: look.id, entity_type: "look", tag_id: tagId, source: "human", model: null }),
+          prefer: "resolution=merge-duplicates",
+        });
+        const newHuman = new Set(humanTagIds);
+        newHuman.add(tagId);
+        setHumanTagIds(newHuman);
+
       } else {
+        // Off tag — add as human
+        await sb("entity_tags", {
+          method: "POST",
+          body: JSON.stringify({ entity_id: look.id, entity_type: "look", tag_id: tagId, source: "human", model: null }),
+          prefer: "resolution=merge-duplicates",
+        });
+        const newHuman = new Set(humanTagIds);
+        newHuman.add(tagId);
+        setHumanTagIds(newHuman);
+        const next = new Set(activeTags);
         next.add(tagId);
-        await sb("entity_tags", { method:"POST", body: JSON.stringify({ entity_id:look.id, entity_type:"look", tag_id:tagId, source:"human", model:null }), prefer:"resolution=merge-duplicates" });
+        setActiveTags(next);
+        setTaggedLookIds(prev => { const s = new Set(prev); s.add(look.id); return s; });
         setTagCounts(prev => ({ ...prev, [tagId]: (prev[tagId] ?? 0) + 1 }));
         setLookIdCache(prev => {
           if (!prev[tagId]) return prev;
@@ -250,15 +311,12 @@ export default function TagStudio() {
           return { ...prev, [tagId]: s };
         });
         if (tagFilterId === tagId) {
-          setTagFilterLookIds(prev => { if (!prev) return prev; const s = new Set(prev); s.add(look.id); return s; });
+          setTagFilterLookIds(prev => {
+            if (!prev) return prev;
+            const s = new Set(prev); s.add(look.id); return s;
+          });
         }
       }
-      setActiveTags(next);
-      setTaggedLookIds(prev => {
-        const s = new Set(prev);
-        if (next.size > 0) s.add(look.id); else s.delete(look.id);
-        return s;
-      });
     } catch(e) { console.error(e); }
     setSaving(false); setFlash(true); setTimeout(() => setFlash(false), 900);
   };
@@ -341,7 +399,7 @@ export default function TagStudio() {
         button:hover { filter: brightness(1.12); }
         a:hover { opacity: 1 !important; }
         .tag-btn:hover { background: #4a4a4a !important; }
-        .tag-btn.on:hover { background: #e0e0e0 !important; }
+        .tag-btn.on:hover { filter: brightness(0.9) !important; }
         input::placeholder { color: #888 !important; }
         textarea::placeholder { color: #888 !important; }
       `}</style>
@@ -547,6 +605,11 @@ export default function TagStudio() {
                         )}
                         <span style={{fontSize:13,color:C.muted,fontWeight:500}}>
                           <span style={{color:C.text,fontWeight:600}}>{activeTags.size}</span> tags
+                          {aiApprovedTagIds.size > 0 && humanTagIds.size < activeTags.size && (
+                            <span style={{color:C.green,fontSize:11,marginLeft:4}}>
+                              ({activeTags.size - humanTagIds.size} AI)
+                            </span>
+                          )}
                         </span>
                       </div>
                     </div>
@@ -593,6 +656,15 @@ export default function TagStudio() {
             </div>
 
             <div style={{flex:1,overflowY:"auto",padding:"20px 24px",display:"flex",flexDirection:"column",gap:20,background:C.bg}}>
+
+              {/* AI tag legend — shown when current look has AI-only tags */}
+              {aiApprovedTagIds.size > humanTagIds.size && (
+                <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"rgba(76,175,110,0.08)",borderRadius:10,border:"1px solid rgba(76,175,110,0.2)"}}>
+                  <span style={{fontSize:12,color:C.green}}>✦</span>
+                  <span style={{fontSize:12,color:C.muted}}>Green tags were applied automatically — click to confirm, or leave as-is</span>
+                </div>
+              )}
+
               {orderedTypes.map(type => (
                 <div key={type}>
                   <div style={{fontSize:11,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase",color:"#b0aec0",paddingBottom:8,marginBottom:8,borderBottom:`1px solid ${C.lift1}`}}>
@@ -601,6 +673,8 @@ export default function TagStudio() {
                   <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                     {(tagsByType[type]||[]).map(tag => {
                       const on = activeTags.has(tag.id);
+                      const isHumanConfirmed = humanTagIds.has(tag.id);
+                      const isAiOnly = on && !isHumanConfirmed;
                       const isColor = type === "color";
                       const isPrimary = primaryTagId === tag.id;
                       return (
@@ -612,10 +686,27 @@ export default function TagStudio() {
                               {isPrimary ? "★" : "☆"}
                             </button>
                           )}
-                          <button className={`tag-btn${on?" on":""}`} onClick={() => toggleTag(tag.id)}
-                            title={tag.definition || undefined}
-                            style={{background:on?C.white:C.lift1,border:"none",color:on?"#212121":C.text,padding:"6px 14px",fontSize:13,fontWeight:on?600:400,cursor:"pointer",borderRadius:isColor&&on?"0 20px 20px 0":20,fontFamily:"Inter,sans-serif",transition:"all 0.1s",textDecoration:tag.definition?"underline dotted":"none",textUnderlineOffset:3}}>
-                            {tag.name}{on && !isColor ? " ✓" : ""}
+                          <button
+                            className={`tag-btn${on ? " on" : ""}`}
+                            onClick={() => toggleTag(tag.id)}
+                            title={isAiOnly ? "AI-tagged — click to confirm" : (tag.definition || undefined)}
+                            style={{
+                              background: isHumanConfirmed ? C.white : isAiOnly ? "rgba(76,175,110,0.18)" : C.lift1,
+                              border: isAiOnly ? "1px solid rgba(76,175,110,0.35)" : "none",
+                              color: isHumanConfirmed ? "#212121" : isAiOnly ? C.green : C.text,
+                              padding: "6px 14px",
+                              fontSize: 13,
+                              fontWeight: isHumanConfirmed ? 600 : 400,
+                              cursor: "pointer",
+                              borderRadius: isColor && on ? "0 20px 20px 0" : 20,
+                              fontFamily: "Inter,sans-serif",
+                              transition: "all 0.1s",
+                              textDecoration: tag.definition ? "underline dotted" : "none",
+                              textUnderlineOffset: 3,
+                            }}>
+                            {tag.name}
+                            {isHumanConfirmed && !isColor ? " ✓" : ""}
+                            {isAiOnly ? " ✦" : ""}
                           </button>
                         </div>
                       );
