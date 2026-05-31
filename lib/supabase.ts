@@ -9,15 +9,13 @@ export const SUPABASE_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzc2xiZ2ZiZG9xeGdvZ2J1dXpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA1NjE2NTUsImV4cCI6MjA3NjEzNzY1NX0.lBL-KUrQbT9N4ACc-CdMauvXmhtuG9_Jr7nhIhQz-g0";
 
 // Shared headers — every REST call needs both apikey AND Authorization: Bearer.
-// Missing the Authorization header produces 401s that look like RLS failures.
 export const H = {
   apikey: SUPABASE_KEY,
   Authorization: `Bearer ${SUPABASE_KEY}`,
   "Content-Type": "application/json",
 };
 
-// Standard fetch helper. Pass { prefer } to override the Prefer header,
-// or any other fetch option (method, body, etc.) via opts.
+// Standard fetch helper.
 export const sb = async (path: string, opts: any = {}) => {
   const { prefer, ...rest } = opts;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -32,11 +30,16 @@ export const sb = async (path: string, opts: any = {}) => {
   return text ? JSON.parse(text) : null;
 };
 
-// Targeted helper: fetch the set of look IDs that carry a given tag.
-// Scoped tightly so it never hits PostgREST row caps.
+// Fetch the set of look IDs that carry a given tag.
+// Includes both human-tagged and AI-approved (Ring 1 auto-applied).
+// This powers Browse mode, Frames look counts, and tag filter in Tag Studio.
 export const fetchLookIdsForTag = async (tagId: string): Promise<Set<string>> => {
   const rows = await sb(
-    `entity_tags?tag_id=eq.${tagId}&entity_type=eq.look&source=eq.human&select=entity_id`
+    `entity_tags?tag_id=eq.${tagId}&entity_type=eq.look&select=entity_id,source,status`
   );
-  return new Set<string>((rows || []).map((r: any) => r.entity_id as string));
+  return new Set<string>(
+    (rows || [])
+      .filter((r: any) => r.source === "human" || (r.source === "ai" && r.status === "approved"))
+      .map((r: any) => r.entity_id as string)
+  );
 };
