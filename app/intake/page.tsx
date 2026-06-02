@@ -239,28 +239,41 @@ function CreateBrandModal({ initialName, locations, onSave, onClose }: any) {
   );
 }
 
-function CreatePersonModal({ initialName, role, roles, onSave, onClose }: any) {
+function CreatePersonModal({ initialName, role, roles, onSave, onClose, onCreateRole }: any) {
   const [name, setName] = useState(initialName || "");
   const [ig, setIg] = useState("");
   const [website, setWebsite] = useState("");
-  const [r, setR] = useState(role || "creative_director");
+  const [selectedRole, setSelectedRole] = useState<any>(
+    () => roles.find((r: any) => r.slug === (role || "").replace(/_/g, "-")) || null
+  );
   return (
     <Modal title="New Person" onClose={onClose} saveDisabled={!name.trim()}
-      onSave={() => onSave({ name: name.trim(), primary_role: r, instagram_url: ig || null, website: website || null, slug: slugify(name) })}>
+      onSave={() => onSave({
+        name: name.trim(),
+        primary_role: selectedRole?.name || null,
+        instagram_url: ig || null,
+        website: website || null,
+        slug: slugify(name),
+      })}>
       <F label="Name *"><input style={s.input} value={name} onChange={e => setName(e.target.value)} autoFocus /></F>
       <F label="Role">
-        <select style={s.select} value={r} onChange={e => setR(e.target.value)}>
-          {roles.map((role: any) => (
-            <option key={role.id} value={role.slug.replace(/-/g, "_")}>{role.name}</option>
-          ))}
-        </select>
+        <InlineTypeahead
+          items={roles}
+          value={selectedRole}
+          onChange={(r: any) => setSelectedRole(r)}
+          onClear={() => setSelectedRole(null)}
+          placeholder="Search or create role..."
+          onCreateClick={async (newRoleName: string) => {
+            const created = await onCreateRole(newRoleName);
+            if (created) setSelectedRole(created);
+          }}
+        />
       </F>
       <F label="Instagram URL"><input style={s.input} value={ig} onChange={e => setIg(e.target.value)} placeholder="https://instagram.com/handle" /></F>
       <F label="Website"><input style={s.input} value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." /></F>
     </Modal>
   );
 }
-
 function CreateEventModal({ initialName, locations, onSave, onClose }: any) {
   const [name, setName] = useState(initialName || "");
   const [type, setType] = useState("fashion_week");
@@ -479,7 +492,7 @@ export default function IntakePage() {
     setContributors(prev => prev.filter(c => c.key !== key));
   }
 
-  // Fast role creation
+  // Fast role creation — used by contributor rows (links to a specific row key)
   async function createRole(name: string, rowKey: string) {
     const slug = slugify(name);
     let created;
@@ -487,6 +500,16 @@ export default function IntakePage() {
     catch { created = { id: `local-${Date.now()}`, name: name.trim().toLowerCase(), slug, sort_order: 999 }; }
     setCreditRoles(prev => [...prev, created].sort((a: any, b: any) => a.sort_order - b.sort_order));
     updateContributorRole(rowKey, created);
+  }
+
+  // Role creation for CreatePersonModal — returns the created role so the modal can set it
+  async function createRoleForModal(name: string) {
+    const slug = slugify(name);
+    let created;
+    try { created = await post("credit_roles", { name: name.trim().toLowerCase(), slug, sort_order: 999 }); }
+    catch { created = { id: `local-${Date.now()}`, name: name.trim().toLowerCase(), slug, sort_order: 999 }; }
+    setCreditRoles(prev => [...prev, created].sort((a: any, b: any) => a.sort_order - b.sort_order));
+    return created;
   }
 
   // ── Create-entity handlers (routed by modal.target) ──
@@ -839,7 +862,7 @@ export default function IntakePage() {
 
         {/* Modals */}
         {modal?.type === "brand" && <CreateBrandModal initialName={modal.name} locations={locations} onSave={handleCreateBrand} onClose={() => setModal(null)} />}
-        {modal?.type === "person" && <CreatePersonModal initialName={modal.name} role={modal.role} roles={creditRoles} onSave={handleCreatePerson} onClose={() => setModal(null)} />}
+        {modal?.type === "person" && <CreatePersonModal initialName={modal.name} role={modal.role} roles={creditRoles} onSave={handleCreatePerson} onClose={() => setModal(null)} onCreateRole={createRoleForModal} />}
         {modal?.type === "event" && <CreateEventModal initialName={modal.name} locations={locations} onSave={handleCreateEvent} onClose={() => setModal(null)} />}
         {modal?.type === "city" && <CreateLocationModal initialName={modal.name} type="city" locations={locations} onSave={handleCreateLocation} onClose={() => setModal(null)} />}
         {modal?.type === "country" && <CreateLocationModal initialName={modal.name} type="country" locations={locations} onSave={handleCreateLocation} onClose={() => setModal(null)} />}
