@@ -70,9 +70,11 @@ function Typeahead({ items, value, onChange, onClear, placeholder, onCreateClick
 
 // ── Modals (person + brand) — mirror Intake's shape ─────────────────────────────
 
-function CreatePersonModal({ initialName, role, roles, onSave, onClose }: any) {
+function CreatePersonModal({ initialName, role, roles, onSave, onClose, onCreateRole }: any) {
   const [name, setName] = useState(initialName || "");
-  const [primaryRole, setPrimaryRole] = useState(role || "creative_director");
+  const [selectedRole, setSelectedRole] = useState<any>(
+    () => roles.find((r: any) => r.slug === (role || "").replace(/_/g, "-")) || null
+  );
   const [ig, setIg] = useState("");
   const [website, setWebsite] = useState("");
   const [saving, setSaving] = useState(false);
@@ -84,7 +86,7 @@ function CreatePersonModal({ initialName, role, roles, onSave, onClose }: any) {
       const result = await fetch(`${SUPABASE_URL}/rest/v1/people`, {
         method: "POST",
         headers: { ...H, Prefer: "return=representation" },
-        body: JSON.stringify({ name: name.trim(), slug: slugify(name), primary_role: primaryRole, instagram_url: ig.trim() || null, website: website.trim() || null }),
+        body: JSON.stringify({ name: name.trim(), slug: slugify(name), primary_role: selectedRole?.name || null, instagram_url: ig.trim() || null, website: website.trim() || null }),
       });
       if (!result.ok) throw new Error(await result.text());
       const [created] = await result.json();
@@ -110,11 +112,17 @@ function CreatePersonModal({ initialName, role, roles, onSave, onClose }: any) {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             <label style={lbl}>Role</label>
-            <select value={primaryRole} onChange={e => setPrimaryRole(e.target.value)} style={{ ...inp2, cursor: "pointer" }}>
-              {roles.map((r: any) => (
-                <option key={r.id} value={r.slug.replace(/-/g, "_")}>{r.name}</option>
-              ))}
-            </select>
+            <Typeahead
+              items={roles}
+              value={selectedRole}
+              onChange={(r: any) => setSelectedRole(r)}
+              onClear={() => setSelectedRole(null)}
+              placeholder="Search or create role..."
+              onCreateClick={async (newRoleName: string) => {
+                const created = await onCreateRole(newRoleName);
+                if (created) setSelectedRole(created);
+              }}
+            />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             <label style={lbl}>Instagram URL</label>
@@ -406,6 +414,16 @@ export default function ReviewQueue() {
     catch { created = { id: `local-${Date.now()}`, name: name.trim().toLowerCase(), slug, sort_order: 999 }; }
     setCreditRoles(prev => [...prev, created].sort((a: any, b: any) => a.sort_order - b.sort_order));
     updateContributorRole(rowKey, created);
+  }
+
+  // Role creation for CreatePersonModal — returns the created role so the modal can set it
+  async function createRoleForModal(name: string) {
+    const slug = slugify(name);
+    let created;
+    try { created = await post("credit_roles", { name: name.trim().toLowerCase(), slug, sort_order: 999 }); }
+    catch { created = { id: `local-${Date.now()}`, name: name.trim().toLowerCase(), slug, sort_order: 999 }; }
+    setCreditRoles(prev => [...prev, created].sort((a: any, b: any) => a.sort_order - b.sort_order));
+    return created;
   }
 
   // Save: delete-and-reinsert both credit tables; dual-write the legacy columns on looks
@@ -820,6 +838,7 @@ export default function ReviewQueue() {
           initialName={personModal.name}
           role={personModal.role}
           roles={creditRoles}
+          onCreateRole={createRoleForModal}
           onClose={() => setPersonModal(null)}
           onSave={(created: any) => {
             setPeople(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
