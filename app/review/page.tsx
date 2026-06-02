@@ -312,13 +312,21 @@ export default function ReviewQueue() {
       setCounts(c);
 
       const filter = statusFilter === "all" ? "" : `status=eq.${statusFilter}&`;
-      const [data, tagCounts] = await Promise.all([
-        sb(`looks?${filter}select=id,status,cloudinary_url,source_url,source_name,source_platform_id,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,is_collaboration,event_id,photo_city_id,photo_country_id,collection_title,collection_description,publication_id,look_brand_credits(brand_id,credit_order,brands(name)),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`),
-        sb(`entity_tags?entity_type=eq.look&select=entity_id`),
-      ]);
+      // Fetch looks first, then fetch entity_tags filtered to only those look IDs.
+      // Filtering by look IDs avoids hitting the default PostgREST 1000-row limit on the
+      // full entity_tags table. Range header allows up to 50k rows (covers 1000 looks
+      // at ~50 tags each comfortably).
+      const data = await sb(`looks?${filter}select=id,status,cloudinary_url,source_url,source_name,source_platform_id,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,is_collaboration,event_id,photo_city_id,photo_country_id,collection_title,collection_description,publication_id,look_brand_credits(brand_id,credit_order,brands(name)),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`);
 
       const tagCountMap: Record<string, number> = {};
-      (tagCounts || []).forEach((t: any) => { tagCountMap[t.entity_id] = (tagCountMap[t.entity_id] || 0) + 1; });
+      if (data.length > 0) {
+        const lookIds = data.map((l: any) => l.id).join(",");
+        const tagRows = await fetch(
+          `${SUPABASE_URL}/rest/v1/entity_tags?entity_id=in.(${lookIds})&entity_type=eq.look&select=entity_id`,
+          { headers: { ...H, "Range-Unit": "items", "Range": "0-49999" } }
+        ).then(r => r.json());
+        (tagRows || []).forEach((t: any) => { tagCountMap[t.entity_id] = (tagCountMap[t.entity_id] || 0) + 1; });
+      }
 
       setLooks(data.map((l: any) => {
         const rows = (l.look_brand_credits || []).slice().sort((a: any, b: any) => (a.credit_order ?? 0) - (b.credit_order ?? 0));
