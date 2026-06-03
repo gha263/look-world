@@ -286,6 +286,8 @@ type Look = {
   event_id: string | null; photo_city_id: string | null; photo_country_id: string | null;
   collection_title: string | null; collection_description: string | null;
   publication_id: string | null;
+  publication_issue_month: number | null;
+  publication_issue_year: number | null;
   // Derived from look_brand_credits embed
   brands_display: string;
   brand_count: number;
@@ -327,6 +329,8 @@ export default function ReviewQueue() {
   const [editSourcePlatform, setEditSourcePlatform] = useState<any>(null);
   const [editCloudinaryUrl, setEditCloudinaryUrl] = useState("");
   const [editPublication, setEditPublication] = useState<any>(null);
+  const [editPublicationIssueMonth, setEditPublicationIssueMonth] = useState("");
+  const [editPublicationIssueYear, setEditPublicationIssueYear] = useState("");
   const [editEvent, setEditEvent] = useState<any>(null);
   const [editPhotoCity, setEditPhotoCity] = useState<any>(null);
   const [editPhotoCountry, setEditPhotoCountry] = useState<any>(null);
@@ -372,7 +376,7 @@ export default function ReviewQueue() {
       // Filtering by look IDs avoids hitting the default PostgREST 1000-row limit on the
       // full entity_tags table. Range header allows up to 50k rows (covers 1000 looks
       // at ~50 tags each comfortably).
-      const data = await sb(`looks?${filter}select=id,status,cloudinary_url,source_url,source_name,source_platform_id,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,is_collaboration,event_id,photo_city_id,photo_country_id,collection_title,collection_description,publication_id,look_brand_credits(brand_id,credit_order,brands(name)),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`);
+      const data = await sb(`looks?${filter}select=id,status,cloudinary_url,source_url,source_name,source_platform_id,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,is_collaboration,event_id,photo_city_id,photo_country_id,collection_title,collection_description,publication_id,publication_issue_month,publication_issue_year,look_brand_credits(brand_id,credit_order,brands(name)),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`);
 
       const tagCountMap: Record<string, number> = {};
       if (data.length > 0) {
@@ -427,6 +431,8 @@ export default function ReviewQueue() {
     setEditSourcePlatform(look.source_platform_id ? platforms.find(p => p.id === look.source_platform_id) || null : null);
     setEditCloudinaryUrl(look.cloudinary_url || "");
     setEditPublication(look.publication_id ? platforms.find(p => p.id === look.publication_id) || null : null);
+    setEditPublicationIssueMonth(look.publication_issue_month?.toString() || "");
+    setEditPublicationIssueYear(look.publication_issue_year?.toString() || "");
     setEditCollectionTitle(look.collection_title || "");
     setEditCollectionDesc(look.collection_description || "");
     setEditNotes(look.notes || "");
@@ -515,6 +521,8 @@ export default function ReviewQueue() {
           source_platform_id: editSourcePlatform?.id || null,
           cloudinary_url: editCloudinaryUrl || null,
           publication_id: editPublication?.id || null,
+          publication_issue_month: editPublicationIssueMonth ? parseInt(editPublicationIssueMonth) : null,
+          publication_issue_year: editPublicationIssueYear ? parseInt(editPublicationIssueYear) : null,
           event_id: editEvent?.id || null,
           photo_city_id: editPhotoCity?.id || null,
           photo_country_id: editPhotoCountry?.id || null,
@@ -846,7 +854,23 @@ export default function ReviewQueue() {
                   </F>
 
                   <F label="Publication" span2>
-                    <Typeahead items={platforms} value={editPublication} onChange={setEditPublication} onClear={() => setEditPublication(null)} placeholder="e.g. Vogue, i-D, Dazed..." onCreateClick={(name: string) => setPublicationModal(name)} />
+                    <Typeahead items={platforms} value={editPublication} onChange={setEditPublication} onClear={() => { setEditPublication(null); setEditPublicationIssueMonth(""); setEditPublicationIssueYear(""); }} placeholder="e.g. Vogue, i-D, Dazed..." onCreateClick={(name: string) => setPublicationModal(name)} />
+                  </F>
+
+                  <F label="Issue Month">
+                    <select value={editPublicationIssueMonth} onChange={e => setEditPublicationIssueMonth(e.target.value)}
+                      style={{ ...sel, opacity: editPublication ? 1 : 0.4 }} disabled={!editPublication}>
+                      <option value="">— month —</option>
+                      {["January","February","March","April","May","June","July","August","September","October","November","December"].map((m, i) => (
+                        <option key={i+1} value={String(i+1)}>{m}</option>
+                      ))}
+                    </select>
+                  </F>
+
+                  <F label="Issue Year">
+                    <input value={editPublicationIssueYear} onChange={e => setEditPublicationIssueYear(e.target.value)}
+                      placeholder="2024" maxLength={4}
+                      style={{ ...inp, opacity: editPublication ? 1 : 0.4 }} disabled={!editPublication} />
                   </F>
 
                   <SectionHead title="Collection" />
