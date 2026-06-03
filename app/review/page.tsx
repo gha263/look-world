@@ -257,6 +257,8 @@ function CreatePlatformModal({ initialName, onSave, onClose }: any) {
     </div>
   );
 }
+
+function F({ label, children, span2 = false }: any) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5, gridColumn: span2 ? "1 / -1" : undefined }}>
       {label && <label style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</label>}
