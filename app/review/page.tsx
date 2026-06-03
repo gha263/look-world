@@ -201,7 +201,62 @@ function CreateBrandModal({ initialName, onSave, onClose }: any) {
   );
 }
 
-function F({ label, children, span2 = false }: any) {
+function CreatePlatformModal({ initialName, onSave, onClose }: any) {
+  const [name, setName] = useState(initialName || "");
+  const [ig, setIg] = useState("");
+  const [website, setWebsite] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      const result = await fetch(`${SUPABASE_URL}/rest/v1/source_platforms`, {
+        method: "POST",
+        headers: { ...H, Prefer: "return=representation" },
+        body: JSON.stringify({ name: name.trim(), slug: slugify(name), instagram_handle: ig.trim() || null, website: website.trim() || null }),
+      });
+      if (!result.ok) throw new Error(await result.text());
+      const [created] = await result.json();
+      onSave(created);
+    } catch (e: any) { alert(e.message); }
+    setSaving(false);
+  };
+
+  const inp2 = { background: C.lift3, border: "none" as const, color: "#ececec", padding: "9px 12px", fontSize: 13, borderRadius: 10, outline: "none", width: "100%", boxSizing: "border-box" as const, fontFamily: "Inter,sans-serif" };
+  const lbl = { fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase" as const, letterSpacing: "0.07em" };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ background: C.lift1, borderRadius: 18, width: "100%", maxWidth: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${C.lift2}` }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "#ececec" }}>New Publication</span>
+          <button tabIndex={-1} onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 22, cursor: "pointer", padding: 0 }}>×</button>
+        </div>
+        <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <label style={lbl}>Name *</label>
+            <input value={name} onChange={e => setName(e.target.value)} autoFocus style={inp2} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <label style={lbl}>Instagram Handle</label>
+            <input value={ig} onChange={e => setIg(e.target.value)} placeholder="@harpersbazaarserbia" style={inp2} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <label style={lbl}>Website</label>
+            <input value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." style={inp2} />
+          </div>
+        </div>
+        <div style={{ padding: "14px 20px", borderTop: `1px solid ${C.lift2}`, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          <button tabIndex={-1} onClick={onClose} style={{ background: C.lift2, border: "none", color: C.muted, padding: "8px 18px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif" }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving || !name.trim()} style={{ background: "#ececec", border: "none", color: "#212121", padding: "8px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: saving || !name.trim() ? 0.4 : 1 }}>
+            {saving ? "Creating…" : "Create"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5, gridColumn: span2 ? "1 / -1" : undefined }}>
       {label && <label style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</label>}
@@ -278,11 +333,11 @@ export default function ReviewQueue() {
   const [editCollectionTitle, setEditCollectionTitle] = useState("");
   const [editCollectionDesc, setEditCollectionDesc] = useState("");
   const [editNotes, setEditNotes] = useState("");
-  const [editingNotes, setEditingNotes] = useState(false);
   const [editKeyLook, setEditKeyLook] = useState(false);
 
   const [personModal, setPersonModal] = useState<{name: string; role: string; target: string} | null>(null);
   const [brandModal, setBrandModal] = useState<{name: string; target: string} | null>(null);
+  const [publicationModal, setPublicationModal] = useState<string | null>(null);
 
   useEffect(() => { loadEntities(); }, []);
   useEffect(() => { loadLooks(); }, [statusFilter]);
@@ -375,7 +430,6 @@ export default function ReviewQueue() {
     setEditCollectionTitle(look.collection_title || "");
     setEditCollectionDesc(look.collection_description || "");
     setEditNotes(look.notes || "");
-    setEditingNotes(false);
     setEditKeyLook(look.is_key_look);
     setEditIsCollab(!!look.is_collaboration);
     setEditEvent(look.event_id ? events.find(e => e.id === look.event_id) || { id: look.event_id, name: look.event_id } : null);
@@ -436,8 +490,8 @@ export default function ReviewQueue() {
     return created;
   }
 
-  // Save: delete-and-reinsert both credit tables; brands attach exclusively through
-  // look_brand_credits (Option A reset, step 4b).
+  // Save: delete-and-reinsert both credit tables; dual-write the legacy columns on looks
+  // so the safety net stays in sync until step 4 drops them.
   const saveEdits = async () => {
     if (!selected) return;
     setSaving(true);
@@ -447,6 +501,7 @@ export default function ReviewQueue() {
       await sb(`looks?id=eq.${selected.id}`, {
         method: "PATCH", prefer: "",
         body: JSON.stringify({
+          // Brands attach exclusively through look_brand_credits (Option A reset, step 4b).
           // is_collaboration stays — factual property of authorship, can't be derived.
           is_collaboration: editIsCollab,
           // The rest of the look's properties
@@ -791,7 +846,7 @@ export default function ReviewQueue() {
                   </F>
 
                   <F label="Publication" span2>
-                    <Typeahead items={platforms} value={editPublication} onChange={setEditPublication} onClear={() => setEditPublication(null)} placeholder="e.g. Vogue, i-D, Dazed..." />
+                    <Typeahead items={platforms} value={editPublication} onChange={setEditPublication} onClear={() => setEditPublication(null)} placeholder="e.g. Vogue, i-D, Dazed..." onCreateClick={(name: string) => setPublicationModal(name)} />
                   </F>
 
                   <SectionHead title="Collection" />
@@ -807,76 +862,7 @@ export default function ReviewQueue() {
                   <SectionHead title="Notes" />
 
                   <F label="" span2>
-                    {!editingNotes ? (
-                      // View mode: render notes as formatted text with clickable URLs.
-                      // Click anywhere to switch to edit mode.
-                      <div
-                        onClick={() => setEditingNotes(true)}
-                        title="Click to edit"
-                        style={{
-                          ...inp,
-                          minHeight: 60,
-                          cursor: "text",
-                          lineHeight: 1.6,
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                          color: editNotes ? C.text : "#666",
-                          fontStyle: editNotes ? "normal" : "italic",
-                        }}
-                      >
-                        {editNotes
-                          ? editNotes.split("\n").map((line, i) => {
-                              // Split each line on URLs and render links inline.
-                              const URL_RE = /(https?:\/\/[^\s]+)/g;
-                              const parts = line.split(URL_RE);
-                              return (
-                                <span key={i}>
-                                  {parts.map((part, j) =>
-                                    /^https?:\/\/[^\s]+$/.test(part) ? (
-                                      <a
-                                        key={j}
-                                        href={part}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        onClick={e => e.stopPropagation()}
-                                        style={{
-                                          color: "#4a9eff",
-                                          textDecoration: "none",
-                                          wordBreak: "break-all",
-                                        }}
-                                        onMouseEnter={e => (e.currentTarget.style.textDecoration = "underline")}
-                                        onMouseLeave={e => (e.currentTarget.style.textDecoration = "none")}
-                                      >
-                                        {part}
-                                      </a>
-                                    ) : (
-                                      <span key={j}>{part}</span>
-                                    )
-                                  )}
-                                  {i < editNotes.split("\n").length - 1 && "\n"}
-                                </span>
-                              );
-                            })
-                          : "Internal scratchpad… (click to edit)"}
-                      </div>
-                    ) : (
-                      // Edit mode: plain textarea. Blur exits; Escape cancels & reverts.
-                      <textarea
-                        value={editNotes}
-                        autoFocus
-                        onChange={e => setEditNotes(e.target.value)}
-                        onBlur={() => setEditingNotes(false)}
-                        onKeyDown={e => {
-                          if (e.key === "Escape") {
-                            setEditNotes(selected?.notes || "");
-                            setEditingNotes(false);
-                          }
-                        }}
-                        rows={4}
-                        placeholder="Internal scratchpad..."
-                        style={{ ...inp, resize: "vertical", lineHeight: 1.6, outline: "1.5px solid #4a9eff" }}
-                      />
-                    )}
+                    <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={2} placeholder="Internal scratchpad..." style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
                   </F>
                 </div>
 
@@ -934,6 +920,18 @@ export default function ReviewQueue() {
             setBrands(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
             if (brandModal.target.startsWith("brandrow:")) updateBrandRow(brandModal.target.split(":")[1], created);
             setBrandModal(null);
+          }}
+        />
+      )}
+
+      {publicationModal && (
+        <CreatePlatformModal
+          initialName={publicationModal}
+          onClose={() => setPublicationModal(null)}
+          onSave={(created: any) => {
+            setPlatforms(prev => [...prev, created].sort((a: any, b: any) => a.name.localeCompare(b.name)));
+            setEditPublication(created);
+            setPublicationModal(null);
           }}
         />
       )}
