@@ -347,6 +347,8 @@ export default function IntakePage() {
   const [platformId, setPlatformId] = useState(INSTAGRAM_ID);
   const [customPlatform, setCustomPlatform] = useState<any>(null);
   const [publication, setPublication] = useState<any>(null);
+  const [publicationIssueMonth, setPublicationIssueMonth] = useState("");
+  const [publicationIssueYear, setPublicationIssueYear] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [cdnUrl, setCdnUrl] = useState("");
   const [sourceName, setSourceName] = useState("");
@@ -568,6 +570,8 @@ export default function IntakePage() {
       source_name: sourceName.trim() || null,
       source_platform_id: pid,
       publication_id: cleanId(publication),
+      publication_issue_month: publicationIssueMonth ? parseInt(publicationIssueMonth) : null,
+      publication_issue_year: publicationIssueYear ? parseInt(publicationIssueYear) : null,
       // Brands attach exclusively through look_brand_credits (Option A reset, step 4b).
       // is_collaboration stays on looks — it's a factual property of authorship that
       // can't be derived from the credits layer.
@@ -639,6 +643,7 @@ export default function IntakePage() {
     setEvent(null); setScene(""); setSeasonTerm(""); setSeasonYear(""); setGender(""); setPublishDate("");
     setPhotoCity(null); setPhotoCountry(null); setNotes("");
     setPlatformId(INSTAGRAM_ID); setCustomPlatform(null); setPublication(null);
+    setPublicationIssueMonth(""); setPublicationIssueYear("");
     setTimeout(() => setStatus("idle"), 3000);
   }
 
@@ -704,9 +709,27 @@ export default function IntakePage() {
               </div>
             </div>
             <Typeahead label="Publication" items={platforms.filter((p: any) => p.id !== INSTAGRAM_ID && p.id !== BRAND_WEBSITE_ID)}
-              value={publication} onChange={setPublication} onClear={() => setPublication(null)}
+              value={publication} onChange={setPublication} onClear={() => { setPublication(null); setPublicationIssueMonth(""); setPublicationIssueYear(""); }}
               placeholder="e.g. Vogue, i-D, Dazed..."
               onCreateClick={(name: string) => setModal({ type: "publication", name })} />
+
+            {/* Issue month + year — only meaningful when a publication is selected */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 8, opacity: publication ? 1 : 0.4, pointerEvents: publication ? "auto" : "none" }}>
+              <div style={s.field}>
+                <label style={s.label}>Issue Month</label>
+                <select style={s.select} value={publicationIssueMonth} onChange={e => setPublicationIssueMonth(e.target.value)} disabled={!publication}>
+                  <option value="">— month —</option>
+                  {["January","February","March","April","May","June","July","August","September","October","November","December"].map((m, i) => (
+                    <option key={i+1} value={String(i+1)}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={s.field}>
+                <label style={s.label}>Year</label>
+                <input style={s.input} value={publicationIssueYear} onChange={e => setPublicationIssueYear(e.target.value)}
+                  placeholder="2024" maxLength={4} disabled={!publication} />
+              </div>
+            </div>
           </Card>
 
           {/* ATTRIBUTION */}
