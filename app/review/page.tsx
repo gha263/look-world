@@ -1,16 +1,35 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { sb, H, SUPABASE_URL } from "@/lib/supabase";
-import { C, FONT_IMPORT } from "@/lib/theme";
 
-function slugify(str: string) {
-  return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
+const SUPABASE_URL = "https://rsslbgfbdoqxgogbuuzc.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzc2xiZ2ZiZG9xeGdvZ2J1dXpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA1NjE2NTUsImV4cCI6MjA3NjEzNzY1NX0.lBL-KUrQbT9N4ACc-CdMauvXmhtuG9_Jr7nhIhQz-g0";
 
-// ── Typeahead (bare — sits inside grid cells / rows) ────────────────────────────
+const sb = async (path: string, opts: any = {}) => {
+  const { prefer, ...rest } = opts;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: prefer ?? "return=representation",
+    },
+    ...rest,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+};
 
-function Typeahead({ items, value, onChange, onClear, placeholder, onCreateClick, width }: any) {
+const C = {
+  bg: "#212121", lift1: "#2f2f2f", lift2: "#3a3a3a", lift3: "#484848",
+  text: "#ececec", muted: "#8e8ea0", dim: "#555",
+  white: "#fff", green: "#4caf6e", red: "#e05a4e", amber: "#f0a500",
+};
+
+// ── Mini Typeahead ─────────────────────────────────────────────────────────────
+
+function Typeahead({ label, items, value, onChange, onClear, placeholder, onCreateClick }: any) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -25,22 +44,18 @@ function Typeahead({ items, value, onChange, onClear, placeholder, onCreateClick
     return () => document.removeEventListener("mousedown", fn);
   }, []);
 
-  const wrapStyle = width
-    ? { position: "relative" as const, width, flexShrink: 0 }
-    : { position: "relative" as const, flex: 1 };
-
   if (value) return (
-    <div style={{ ...wrapStyle, display: "flex", alignItems: "center", gap: 6, background: C.lift3, borderRadius: 10, padding: "8px 12px" }}>
-      <span style={{ flex: 1, fontSize: 13, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value.name}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: 6, background: C.lift3, borderRadius: 10, padding: "8px 12px" }}>
+      <span style={{ flex: 1, fontSize: 13, color: C.text }}>{value.name}</span>
       <button tabIndex={-1} onClick={onClear} style={{ background: "none", border: "none", color: C.muted, fontSize: 18, cursor: "pointer", padding: 0, lineHeight: 1 }}>×</button>
     </div>
   );
 
   return (
-    <div style={wrapStyle} ref={ref}>
+    <div style={{ position: "relative" }} ref={ref}>
       <input
         value={query}
-        placeholder={placeholder || "Search..."}
+        placeholder={placeholder || `Search ${label?.toLowerCase() || ""}...`}
         onChange={e => { setQuery(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
         onKeyDown={e => { if (e.key === "Tab" || e.key === "Escape") setOpen(false); }}
@@ -68,16 +83,44 @@ function Typeahead({ items, value, onChange, onClear, placeholder, onCreateClick
   );
 }
 
-// ── Modals (person + brand) — mirror Intake's shape ─────────────────────────────
+// ── Multi-person credit field ──────────────────────────────────────────────────
 
-function CreatePersonModal({ initialName, role, roles, onSave, onClose, onCreateRole }: any) {
-  const [name, setName] = useState(initialName || "");
-  const [selectedRole, setSelectedRole] = useState<any>(
-    () => roles.find((r: any) => r.slug === (role || "").replace(/_/g, "-")) || null
+function MultiCredit({ label, people, role, values, onChange, onCreateClick }: any) {
+  const inp2 = { background: C.lift3, border: "none" as const, color: "#ececec", padding: "8px 12px", fontSize: 13, borderRadius: 10, outline: "none", width: "100%", boxSizing: "border-box" as const, fontFamily: "Inter,sans-serif" };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {values.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+          {values.map((p: any) => (
+            <div key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: C.lift3, borderRadius: 10, padding: "5px 10px", fontSize: 13 }}>
+              <span style={{ color: "#ececec", fontWeight: 500 }}>{p.name}</span>
+              <button tabIndex={-1} onClick={() => onChange(values.filter((x: any) => x.id !== p.id))}
+                style={{ background: "none", border: "none", color: C.muted, fontSize: 16, cursor: "pointer", padding: 0, lineHeight: 1 }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <Typeahead
+        items={people.filter((p: any) => p.primary_role === role && !values.find((v: any) => v.id === p.id))}
+        value={null}
+        onChange={(p: any) => onChange([...values, p])}
+        onClear={() => {}}
+        placeholder={`Add ${label.toLowerCase()}...`}
+        onCreateClick={onCreateClick}
+      />
+    </div>
   );
+}
+
+// ── Create person modal ────────────────────────────────────────────────────────
+
+function CreatePersonModal({ initialName, role, onSave, onClose }: any) {
+  const [name, setName] = useState(initialName || "");
+  const [primaryRole, setPrimaryRole] = useState(role || "creative_director");
   const [ig, setIg] = useState("");
-  const [website, setWebsite] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -85,8 +128,8 @@ function CreatePersonModal({ initialName, role, roles, onSave, onClose, onCreate
     try {
       const result = await fetch(`${SUPABASE_URL}/rest/v1/people`, {
         method: "POST",
-        headers: { ...H, Prefer: "return=representation" },
-        body: JSON.stringify({ name: name.trim(), slug: slugify(name), primary_role: selectedRole?.name || null, instagram_url: ig.trim() || null, website: website.trim() || null }),
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+        body: JSON.stringify({ name: name.trim(), slug: slugify(name), primary_role: primaryRole, instagram_handle: ig.trim() || null }),
       });
       if (!result.ok) throw new Error(await result.text());
       const [created] = await result.json();
@@ -96,7 +139,6 @@ function CreatePersonModal({ initialName, role, roles, onSave, onClose, onCreate
   };
 
   const inp2 = { background: C.lift3, border: "none" as const, color: "#ececec", padding: "9px 12px", fontSize: 13, borderRadius: 10, outline: "none", width: "100%", boxSizing: "border-box" as const, fontFamily: "Inter,sans-serif" };
-  const lbl = { fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase" as const, letterSpacing: "0.07em" };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
@@ -107,88 +149,25 @@ function CreatePersonModal({ initialName, role, roles, onSave, onClose, onCreate
         </div>
         <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <label style={lbl}>Name *</label>
+            <label style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em" }}>Name *</label>
             <input value={name} onChange={e => setName(e.target.value)} autoFocus style={inp2} />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <label style={lbl}>Role</label>
-            <Typeahead
-              items={roles}
-              value={selectedRole}
-              onChange={(r: any) => setSelectedRole(r)}
-              onClear={() => setSelectedRole(null)}
-              placeholder="Search or create role..."
-              onCreateClick={async (newRoleName: string) => {
-                const created = await onCreateRole(newRoleName);
-                if (created) setSelectedRole(created);
-              }}
-            />
+            <label style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em" }}>Role</label>
+            <select value={primaryRole} onChange={e => setPrimaryRole(e.target.value)} style={{ ...inp2, cursor: "pointer" }}>
+              <option value="creative_director">Creative Director</option>
+              <option value="photographer">Photographer</option>
+              <option value="stylist">Stylist</option>
+              <option value="model">Model</option>
+              <option value="journalist">Journalist</option>
+              <option value="makeup_artist">Makeup Artist</option>
+              <option value="casting_director">Casting Director</option>
+            </select>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <label style={lbl}>Instagram URL</label>
-            <input value={ig} onChange={e => setIg(e.target.value)} placeholder="https://instagram.com/handle" style={inp2} />
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <label style={lbl}>Website</label>
-            <input value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." style={inp2} />
-          </div>
-        </div>
-        <div style={{ padding: "14px 20px", borderTop: `1px solid ${C.lift2}`, display: "flex", justifyContent: "flex-end", gap: 10 }}>
-          <button tabIndex={-1} onClick={onClose} style={{ background: C.lift2, border: "none", color: C.muted, padding: "8px 18px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif" }}>Cancel</button>
-          <button onClick={handleSave} disabled={saving || !name.trim()} style={{ background: "#ececec", border: "none", color: "#212121", padding: "8px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: saving || !name.trim() ? 0.4 : 1 }}>
-            {saving ? "Creating…" : "Create"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CreateBrandModal({ initialName, onSave, onClose }: any) {
-  const [name, setName] = useState(initialName || "");
-  const [ig, setIg] = useState("");
-  const [website, setWebsite] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    if (!name.trim()) return;
-    setSaving(true);
-    try {
-      const result = await fetch(`${SUPABASE_URL}/rest/v1/brands`, {
-        method: "POST",
-        headers: { ...H, Prefer: "return=representation" },
-        body: JSON.stringify({ name: name.trim(), slug: slugify(name), instagram_handle: ig.trim() || null, website: website.trim() || null }),
-      });
-      if (!result.ok) throw new Error(await result.text());
-      const [created] = await result.json();
-      onSave(created);
-    } catch (e: any) { alert(e.message); }
-    setSaving(false);
-  };
-
-  const inp2 = { background: C.lift3, border: "none" as const, color: "#ececec", padding: "9px 12px", fontSize: 13, borderRadius: 10, outline: "none", width: "100%", boxSizing: "border-box" as const, fontFamily: "Inter,sans-serif" };
-  const lbl = { fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase" as const, letterSpacing: "0.07em" };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ background: C.lift1, borderRadius: 18, width: "100%", maxWidth: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${C.lift2}` }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#ececec" }}>New Brand</span>
-          <button tabIndex={-1} onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 22, cursor: "pointer", padding: 0 }}>×</button>
-        </div>
-        <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <label style={lbl}>Name *</label>
-            <input value={name} onChange={e => setName(e.target.value)} autoFocus style={inp2} />
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <label style={lbl}>Instagram Handle</label>
+            <label style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em" }}>Instagram Handle</label>
             <input value={ig} onChange={e => setIg(e.target.value)} placeholder="@handle" style={inp2} />
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <label style={lbl}>Website</label>
-            <input value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." style={inp2} />
-          </div>
         </div>
         <div style={{ padding: "14px 20px", borderTop: `1px solid ${C.lift2}`, display: "flex", justifyContent: "flex-end", gap: 10 }}>
           <button tabIndex={-1} onClick={onClose} style={{ background: C.lift2, border: "none", color: C.muted, padding: "8px 18px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif" }}>Cancel</button>
@@ -200,6 +179,8 @@ function CreateBrandModal({ initialName, onSave, onClose }: any) {
     </div>
   );
 }
+
+// ── Field wrapper ──────────────────────────────────────────────────────────────
 
 function F({ label, children, span2 = false }: any) {
   return (
@@ -209,6 +190,8 @@ function F({ label, children, span2 = false }: any) {
     </div>
   );
 }
+
+// ── Section header ─────────────────────────────────────────────────────────────
 
 function SectionHead({ title }: { title: string }) {
   return (
@@ -226,42 +209,31 @@ type Look = {
   scene: string | null; gender: string | null;
   season_display: string | null; season_term: string | null; season_year: number | null;
   date_published: string | null; is_key_look: boolean; notes: string | null;
-  created_at: string;
-  is_collaboration: boolean;
+  created_at: string; brand_id: string | null; brand_name: string;
   event_id: string | null; photo_city_id: string | null; photo_country_id: string | null;
-  collection_title: string | null; collection_description: string | null;
+  courtesy_brand_id: string | null; collection_title: string | null; collection_description: string | null;
   publication_id: string | null;
-  // Derived from look_brand_credits embed
-  brands_display: string;
-  brand_count: number;
   credit_count: number; tag_count: number;
 };
-
-type Contributor = { key: string; role: any; person: any };
-type BrandRow = { key: string; brand: any; isCourtesy: boolean };
 
 export default function ReviewQueue() {
   const [looks, setLooks] = useState<Look[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all"|"draft"|"published"|"archived">("draft");
   const [selected, setSelected] = useState<Look | null>(null);
   const [saving, setSaving] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
 
+  // Entity lists for typeaheads
   const [brands, setBrands] = useState<any[]>([]);
   const [people, setPeople] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [platforms, setPlatforms] = useState<any[]>([]);
-  const [creditRoles, setCreditRoles] = useState<any[]>([]);
 
-  // Edit state
-  const [brandRows, setBrandRows] = useState<BrandRow[]>([]);
-  const [editIsCollab, setEditIsCollab] = useState(false);
-  const [contributors, setContributors] = useState<Contributor[]>([]);
-
+  // Edit state — look fields
+  const [editBrand, setEditBrand] = useState<any>(null);
   const [editScene, setEditScene] = useState("");
   const [editGender, setEditGender] = useState("");
   const [editSeasonTerm, setEditSeasonTerm] = useState("");
@@ -278,33 +250,37 @@ export default function ReviewQueue() {
   const [editCollectionTitle, setEditCollectionTitle] = useState("");
   const [editCollectionDesc, setEditCollectionDesc] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editingNotes, setEditingNotes] = useState(false);
   const [editKeyLook, setEditKeyLook] = useState(false);
+  const [editCourtesy, setEditCourtesy] = useState(false);
 
-  const [personModal, setPersonModal] = useState<{name: string; role: string; target: string} | null>(null);
-  const [brandModal, setBrandModal] = useState<{name: string; target: string} | null>(null);
+  // Edit state — credits (multi-person)
+  const [existingCredits, setExistingCredits] = useState<any[]>([]);
+  const [editCDs, setEditCDs] = useState<any[]>([]);
+  const [editPhotogs, setEditPhotogs] = useState<any[]>([]);
+  const [editStylists, setEditStylists] = useState<any[]>([]);
+
+  // Create person modal
+  const [createPersonModal, setCreatePersonModal] = useState<{name: string; role: string} | null>(null);
 
   useEffect(() => { loadEntities(); }, []);
   useEffect(() => { loadLooks(); }, [statusFilter]);
 
-  const cdRole = () => creditRoles.find(r => r.slug === "creative-director") || creditRoles[0];
-
   const loadEntities = async () => {
     try {
-      const [b, p, e, l, pl, cr] = await Promise.all([
+      const [b, p, e, l, pl] = await Promise.all([
         sb("brands?select=id,name&order=name"),
         sb("people?select=id,name,primary_role&order=name"),
         sb("events?select=id,name,event_type&order=name"),
         sb("locations?select=id,name,location_type&order=location_type,name"),
         sb("source_platforms?select=id,name,slug&order=name"),
-        sb("credit_roles?select=id,slug,name,sort_order&order=sort_order"),
       ]);
-      setBrands(b); setPeople(p); setEvents(e); setLocations(l); setPlatforms(pl); setCreditRoles(cr);
+      setBrands(b); setPeople(p); setEvents(e); setLocations(l); setPlatforms(pl);
     } catch(e) { console.error(e); }
   };
 
-  // List query reads brands from look_brand_credits (no longer brand_id).
   const loadLooks = async () => {
-    setLoading(true); setSelected(null); setLoadError(null);
+    setLoading(true); setSelected(null);
     try {
       const allLooks = await sb("looks?select=status");
       const c: Record<string, number> = { draft: 0, published: 0, archived: 0 };
@@ -312,55 +288,38 @@ export default function ReviewQueue() {
       setCounts(c);
 
       const filter = statusFilter === "all" ? "" : `status=eq.${statusFilter}&`;
-      // Fetch looks first, then fetch entity_tags filtered to only those look IDs.
-      // Filtering by look IDs avoids hitting the default PostgREST 1000-row limit on the
-      // full entity_tags table. Range header allows up to 50k rows (covers 1000 looks
-      // at ~50 tags each comfortably).
-      const data = await sb(`looks?${filter}select=id,status,cloudinary_url,source_url,source_name,source_platform_id,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,is_collaboration,event_id,photo_city_id,photo_country_id,collection_title,collection_description,publication_id,look_brand_credits(brand_id,credit_order,brands(name)),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`);
+      const [data, tagCounts] = await Promise.all([
+        sb(`looks?${filter}select=id,status,cloudinary_url,source_url,source_name,source_platform_id,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,brand_id,event_id,photo_city_id,photo_country_id,courtesy_brand_id,collaborating_brand_id,collection_title,collection_description,publication_id,brand:brand_id(name),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`),
+        sb(`entity_tags?entity_type=eq.look&select=entity_id`),
+      ]);
 
+      // Build tag count map from entity_tags
       const tagCountMap: Record<string, number> = {};
-      if (data.length > 0) {
-        const lookIds = data.map((l: any) => l.id).join(",");
-        const tagRows = await fetch(
-          `${SUPABASE_URL}/rest/v1/entity_tags?entity_id=in.(${lookIds})&entity_type=eq.look&select=entity_id`,
-          { headers: { ...H, "Range-Unit": "items", "Range": "0-49999" } }
-        ).then(r => r.json());
-        (tagRows || []).forEach((t: any) => { tagCountMap[t.entity_id] = (tagCountMap[t.entity_id] || 0) + 1; });
-      }
+      (tagCounts || []).forEach((t: any) => {
+        tagCountMap[t.entity_id] = (tagCountMap[t.entity_id] || 0) + 1;
+      });
 
-      setLooks(data.map((l: any) => {
-        const rows = (l.look_brand_credits || []).slice().sort((a: any, b: any) => (a.credit_order ?? 0) - (b.credit_order ?? 0));
-        const names = rows.map((r: any) => r.brands?.name).filter(Boolean);
-        return {
-          ...l,
-          brands_display: l.is_collaboration && names.length >= 2 ? names.join(" × ") : names.join(", "),
-          brand_count: rows.length,
-          credit_count: l.look_credits?.length || 0,
-          tag_count: tagCountMap[l.id] || 0,
-        };
-      }));
-    } catch(e: any) { console.error(e); setLoadError(e?.message || "Failed to load looks."); }
+      setLooks(data.map((l: any) => ({
+        ...l,
+        brand_name: l.brand?.name || "",
+        credit_count: l.look_credits?.length || 0,
+        tag_count: tagCountMap[l.id] || 0,
+      })));
+    } catch(e) { console.error(e); }
     setLoading(false);
   };
 
-  // Load brand rows from look_brand_credits, contributor rows from look_credits.
-  const loadDetail = async (lookId: string) => {
-    const [bRows, credits] = await Promise.all([
-      sb(`look_brand_credits?look_id=eq.${lookId}&select=id,brand_id,credit_order,is_courtesy,brands(id,name)&order=credit_order`),
-      sb(`look_credits?look_id=eq.${lookId}&select=id,role,person_id,credit_order,people(id,name,primary_role)&order=credit_order`),
-    ]);
-    setBrandRows((bRows || [])
-      .filter((r: any) => r.brands)
-      .map((r: any, i: number) => ({ key: `b-${r.id}-${i}`, brand: r.brands, isCourtesy: !!r.is_courtesy })));
-
-    const roleByName = (name: string) => creditRoles.find(r => r.name === name) || { id: `adhoc-${name}`, name, slug: slugify(name), sort_order: 999 };
-    setContributors((credits || [])
-      .filter((c: any) => c.people)
-      .map((c: any, i: number) => ({ key: `c-${c.id}-${i}`, role: roleByName(c.role), person: c.people })));
+  const loadCredits = async (lookId: string) => {
+    const credits = await sb(`look_credits?look_id=eq.${lookId}&select=id,role,person_id,people(id,name,primary_role)`);
+    setExistingCredits(credits || []);
+    setEditCDs(credits?.filter((c: any) => c.role === "creative director").map((c: any) => c.people).filter(Boolean) || []);
+    setEditPhotogs(credits?.filter((c: any) => c.role === "photographer").map((c: any) => c.people).filter(Boolean) || []);
+    setEditStylists(credits?.filter((c: any) => c.role === "stylist").map((c: any) => c.people).filter(Boolean) || []);
   };
 
   const selectLook = (look: Look) => {
     setSelected(look);
+    setEditBrand(look.brand_id ? { id: look.brand_id, name: look.brand_name } : null);
     setEditScene(look.scene || "");
     setEditGender(look.gender || "");
     setEditSeasonTerm(look.season_term || "");
@@ -374,81 +333,25 @@ export default function ReviewQueue() {
     setEditCollectionTitle(look.collection_title || "");
     setEditCollectionDesc(look.collection_description || "");
     setEditNotes(look.notes || "");
+    setEditingNotes(false);
     setEditKeyLook(look.is_key_look);
-    setEditIsCollab(!!look.is_collaboration);
+    setEditCourtesy(!!look.courtesy_brand_id);
+    // Resolve FKs for event, city, country
     setEditEvent(look.event_id ? events.find(e => e.id === look.event_id) || { id: look.event_id, name: look.event_id } : null);
     setEditPhotoCity(look.photo_city_id ? locations.find(l => l.id === look.photo_city_id) || null : null);
     setEditPhotoCountry(look.photo_country_id ? locations.find(l => l.id === look.photo_country_id) || null : null);
-    loadDetail(look.id);
+    loadCredits(look.id);
   };
 
-  // ── Row helpers ──
-  function addBrandRow() { setBrandRows(prev => [...prev, { key: `b-new-${Date.now()}-${prev.length}`, brand: null, isCourtesy: false }]); }
-  function updateBrandRow(key: string, brand: any) { setBrandRows(prev => prev.map(b => b.key === key ? { ...b, brand } : b)); }
-  function toggleBrandCourtesy(key: string) { setBrandRows(prev => prev.map(b => b.key === key ? { ...b, isCourtesy: !b.isCourtesy } : b)); }
-  function removeBrandRow(key: string) { setBrandRows(prev => prev.filter(b => b.key !== key)); }
-
-  function addContributor() {
-    // Start blank — name first, role auto-fills when person is selected
-    setContributors(prev => [...prev, { key: `c-new-${Date.now()}-${prev.length}`, role: null, person: null }]);
-  }
-  function updateContributorRole(key: string, role: any) { setContributors(prev => prev.map(c => c.key === key ? { ...c, role } : c)); }
-  function updateContributorPerson(key: string, person: any) {
-    setContributors(prev => prev.map(c => {
-      if (c.key !== key) return c;
-      let role = c.role;
-      if (!role && person?.primary_role) {
-        const slug = person.primary_role.replace(/_/g, "-");
-        const match = creditRoles.find((r: any) => r.slug === slug);
-        if (match) role = match;
-      }
-      return { ...c, person, role };
-    }));
-  }
-  function removeContributor(key: string) { setContributors(prev => prev.filter(c => c.key !== key)); }
-
-  async function post(path: string, data: any) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      method: "POST", headers: { ...H, Prefer: "return=representation" }, body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    return (await res.json())[0];
-  }
-
-  async function createRole(name: string, rowKey: string) {
-    const slug = slugify(name);
-    let created;
-    try { created = await post("credit_roles", { name: name.trim().toLowerCase(), slug, sort_order: 999 }); }
-    catch { created = { id: `local-${Date.now()}`, name: name.trim().toLowerCase(), slug, sort_order: 999 }; }
-    setCreditRoles(prev => [...prev, created].sort((a: any, b: any) => a.sort_order - b.sort_order));
-    updateContributorRole(rowKey, created);
-  }
-
-  // Role creation for CreatePersonModal — returns the created role so the modal can set it
-  async function createRoleForModal(name: string) {
-    const slug = slugify(name);
-    let created;
-    try { created = await post("credit_roles", { name: name.trim().toLowerCase(), slug, sort_order: 999 }); }
-    catch { created = { id: `local-${Date.now()}`, name: name.trim().toLowerCase(), slug, sort_order: 999 }; }
-    setCreditRoles(prev => [...prev, created].sort((a: any, b: any) => a.sort_order - b.sort_order));
-    return created;
-  }
-
-  // Save: delete-and-reinsert both credit tables; dual-write the legacy columns on looks
-  // so the safety net stays in sync until step 4 drops them.
   const saveEdits = async () => {
     if (!selected) return;
     setSaving(true);
     try {
-      const validBrandRows = brandRows.filter(b => b.brand?.id);
-
+      // Save look fields
       await sb(`looks?id=eq.${selected.id}`, {
         method: "PATCH", prefer: "",
         body: JSON.stringify({
-          // Brands attach exclusively through look_brand_credits (Option A reset, step 4b).
-          // is_collaboration stays — factual property of authorship, can't be derived.
-          is_collaboration: editIsCollab,
-          // The rest of the look's properties
+          brand_id: editBrand?.id || null,
           scene: editScene || null,
           gender: editGender || null,
           season_term: editSeasonTerm || null,
@@ -466,23 +369,17 @@ export default function ReviewQueue() {
           collection_description: editCollectionDesc || null,
           notes: editNotes || null,
           is_key_look: editKeyLook,
+          courtesy_brand_id: editCourtesy ? (editBrand?.id || null) : null,
         }),
       });
 
-      // Brand credits: delete-and-reinsert
-      await sb(`look_brand_credits?look_id=eq.${selected.id}`, { method: "DELETE", prefer: "" });
-      const newBrandCredits = validBrandRows.map((b, i) => ({
-        look_id: selected.id, brand_id: b.brand.id, role: null, credit_order: i, is_courtesy: b.isCourtesy,
-      }));
-      if (newBrandCredits.length > 0) {
-        await sb("look_brand_credits", { method: "POST", body: JSON.stringify(newBrandCredits) });
-      }
-
-      // Person credits: delete-and-reinsert
+      // Save credits — delete existing, reinsert
       await sb(`look_credits?look_id=eq.${selected.id}`, { method: "DELETE", prefer: "" });
-      const newCredits = contributors
-        .filter(c => c.person?.id && c.role)
-        .map((c, i) => ({ look_id: selected.id, person_id: c.person.id, role: c.role.name, credit_order: i }));
+      const newCredits = [
+        ...editCDs.map(p => ({ look_id: selected.id, person_id: p.id, role: "creative director" })),
+        ...(!editCourtesy ? editPhotogs.map(p => ({ look_id: selected.id, person_id: p.id, role: "photographer" })) : []),
+        ...editStylists.map(p => ({ look_id: selected.id, person_id: p.id, role: "stylist" })),
+      ].filter(c => c.person_id);
       if (newCredits.length > 0) {
         await sb("look_credits", { method: "POST", body: JSON.stringify(newCredits) });
       }
@@ -516,7 +413,7 @@ export default function ReviewQueue() {
 
   const missingFields = (look: Look) => {
     const m = [];
-    if (look.brand_count === 0) m.push("brands");
+    if (!look.brand_name) m.push("brand");
     if (!look.scene) m.push("scene");
     if (!look.gender) m.push("gender");
     if (!look.season_year) m.push("season");
@@ -531,13 +428,13 @@ export default function ReviewQueue() {
   const sel = { ...inp, cursor: "pointer" as const };
 
   const filteredLooks = search.trim()
-    ? looks.filter(l => l.brands_display.toLowerCase().includes(search.toLowerCase()) || (l.source_name || "").toLowerCase().includes(search.toLowerCase()))
+    ? looks.filter(l => l.brand_name.toLowerCase().includes(search.toLowerCase()) || (l.source_name || "").toLowerCase().includes(search.toLowerCase()))
     : looks;
 
   return (
     <>
       <style>{`
-        ${FONT_IMPORT}
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
         .look-row:hover { background: #2a2a2a !important; }
@@ -550,12 +447,12 @@ export default function ReviewQueue() {
         {/* Toolbar */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 20px", borderBottom: `1px solid ${C.lift1}`, flexShrink: 0, flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 4 }}>
-            {(["draft","published","archived","all"] as const).map(st => (
-              <button key={st} onClick={() => setStatusFilter(st)}
-                style={{ background: statusFilter===st ? C.lift2 : "transparent", border: "none", color: statusFilter===st ? C.text : C.muted, padding: "6px 14px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", fontWeight: statusFilter===st ? 600 : 400 }}>
-                {st.charAt(0).toUpperCase()+st.slice(1)}
-                {st !== "all" && counts[st] !== undefined && (
-                  <span style={{ marginLeft: 6, fontSize: 11, color: st==="draft" ? C.amber : C.muted }}>{counts[st]}</span>
+            {(["draft","published","archived","all"] as const).map(s => (
+              <button key={s} onClick={() => setStatusFilter(s)}
+                style={{ background: statusFilter===s ? C.lift2 : "transparent", border: "none", color: statusFilter===s ? C.text : C.muted, padding: "6px 14px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", fontWeight: statusFilter===s ? 600 : 400 }}>
+                {s.charAt(0).toUpperCase()+s.slice(1)}
+                {s !== "all" && counts[s] !== undefined && (
+                  <span style={{ marginLeft: 6, fontSize: 11, color: s==="draft" ? C.amber : C.muted }}>{counts[s]}</span>
                 )}
               </button>
             ))}
@@ -579,13 +476,6 @@ export default function ReviewQueue() {
           <div style={{ width: selected ? "44%" : "100%", flexShrink: 0, overflowY: "auto", borderRight: selected ? `1px solid ${C.lift1}` : "none", transition: "width 0.2s" }}>
             {loading ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200, color: C.muted }}>Loading…</div>
-            ) : loadError ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 300, gap: 10, color: C.red, padding: 24, textAlign: "center" }}>
-                <div style={{ fontSize: 32 }}>⚠</div>
-                <div style={{ fontWeight: 600 }}>Couldn't load looks</div>
-                <div style={{ fontSize: 12, color: C.muted, maxWidth: 380, fontFamily: "monospace", wordBreak: "break-word" }}>{loadError}</div>
-                <button onClick={loadLooks} style={{ marginTop: 4, background: C.lift2, border: "none", color: C.text, padding: "7px 16px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif" }}>Retry</button>
-              </div>
             ) : filteredLooks.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 300, gap: 8, color: C.muted }}>
                 <div style={{ fontSize: 32 }}>✓</div>
@@ -595,7 +485,7 @@ export default function ReviewQueue() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.lift1}` }}>
-                    {["Image","Brands","Scene","Season","Credits","Tags","Missing","Status",""].map(h => (
+                    {["Image","Brand","Scene","Season","Credits","Tags","Missing","Status",""].map(h => (
                       <th key={h} style={{ padding: "8px 10px", fontSize: 11, fontWeight: 600, color: C.muted, textAlign: "left", letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
@@ -613,9 +503,9 @@ export default function ReviewQueue() {
                             ? <img src={look.cloudinary_url} alt="" style={{ width: 40, height: 48, objectFit: "cover", borderRadius: 4, display: "block" }} />
                             : <div style={{ width: 40, height: 48, background: C.lift2, borderRadius: 4 }} />}
                         </td>
-                        <td style={{ padding: "6px 10px", maxWidth: 160 }}>
-                          <div style={{ fontSize: 13, fontWeight: 500, color: look.brands_display ? C.text : C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{look.brands_display || "—"}</div>
-                          {look.source_name && !look.brands_display && <div style={{ fontSize: 11, color: C.muted }}>{look.source_name}</div>}
+                        <td style={{ padding: "6px 10px", maxWidth: 130 }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: look.brand_name ? C.text : C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{look.brand_name || "—"}</div>
+                          {look.source_name && !look.brand_name && <div style={{ fontSize: 11, color: C.muted }}>{look.source_name}</div>}
                         </td>
                         <td style={{ padding: "6px 10px" }}><span style={{ fontSize: 12, color: look.scene ? C.text : C.dim }}>{look.scene || "—"}</span></td>
                         <td style={{ padding: "6px 10px", whiteSpace: "nowrap" }}><span style={{ fontSize: 12, color: look.season_display ? C.text : C.dim }}>{look.season_display || (look.season_year?.toString()) || "—"}</span></td>
@@ -647,65 +537,98 @@ export default function ReviewQueue() {
           {selected && (
             <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
 
+              {/* Image */}
               <div style={{ position: "relative", background: "#181818", flexShrink: 0 }}>
                 <img src={selected.cloudinary_url} alt="" style={{ width: "100%", maxHeight: 320, objectFit: "contain", display: "block" }} />
                 <button onClick={() => setSelected(null)}
-                  style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.7)", border: "none", color: C.text, width: 30, height: 30, borderRadius: 15, fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter,sans-serif" }}>×</button>
+                  style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.7)", border: "none", color: C.text, width: 30, height: 30, borderRadius: 15, fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter,sans-serif" }}>
+                  ×
+                </button>
                 {selected.source_url && (
                   <a href={selected.source_url} target="_blank" rel="noreferrer"
-                    style={{ position: "absolute", top: 10, left: 10, fontSize: 12, color: C.text, textDecoration: "none", background: "rgba(0,0,0,0.7)", padding: "5px 10px", borderRadius: 12, fontWeight: 500, fontFamily: "Inter,sans-serif" }}>↗ source</a>
+                    style={{ position: "absolute", top: 10, left: 10, fontSize: 12, color: C.text, textDecoration: "none", background: "rgba(0,0,0,0.7)", padding: "5px 10px", borderRadius: 12, fontWeight: 500, fontFamily: "Inter,sans-serif" }}>
+                    ↗ source
+                  </a>
                 )}
               </div>
 
+              {/* Fields */}
               <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
 
+                {/* Meta */}
                 <div style={{ fontSize: 12, color: C.muted }}>
                   Ingested {new Date(selected.created_at).toLocaleDateString()} · {selected.credit_count} credits · {selected.tag_count} tags
                 </div>
 
+                {/* Grid of all fields */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
 
+                  {/* ATTRIBUTION */}
                   <SectionHead title="Attribution" />
 
-                  {/* Brands — flat list with is_courtesy per row */}
-                  <F label="Brands" span2>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {brandRows.map(b => (
-                        <div key={b.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                          <Typeahead items={brands} value={b.brand} onChange={(br: any) => updateBrandRow(b.key, br)} onClear={() => updateBrandRow(b.key, null)} placeholder="Search or create brand..." onCreateClick={(name: string) => setBrandModal({ name, target: `brandrow:${b.key}` })} />
-                          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: b.brand ? C.text : C.dim, cursor: b.brand ? "pointer" : "default", whiteSpace: "nowrap", userSelect: "none" }}>
-                            <input type="checkbox" checked={b.isCourtesy} disabled={!b.brand} onChange={() => toggleBrandCourtesy(b.key)} style={{ accentColor: C.white, cursor: "pointer" }} />
-                            Courtesy
-                          </label>
-                          <button tabIndex={-1} onClick={() => removeBrandRow(b.key)} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer", padding: "0 4px", lineHeight: 1, flexShrink: 0 }}>×</button>
+                  <F label="Brand" span2>
+                    <Typeahead items={brands} value={editBrand} onChange={setEditBrand} onClear={() => { setEditBrand(null); setEditCourtesy(false); }} placeholder="Search brand..." />
+                  </F>
+
+                  <F label="Creative Director" span2>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {editCDs.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                          {editCDs.map((p: any) => (
+                            <div key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: C.lift3, borderRadius: 10, padding: "5px 10px", fontSize: 13 }}>
+                              <span style={{ color: C.text, fontWeight: 500 }}>{p.name}</span>
+                              <button tabIndex={-1} onClick={() => setEditCDs(editCDs.filter((x:any) => x.id !== p.id))} style={{ background: "none", border: "none", color: C.muted, fontSize: 16, cursor: "pointer", padding: 0, lineHeight: 1 }}>×</button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                      <button onClick={addBrandRow} style={{ alignSelf: "flex-start", background: "transparent", border: `1.5px dashed ${C.lift3}`, color: C.muted, padding: "7px 14px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif" }}>+ Add brand</button>
+                      )}
+                      <Typeahead items={people.filter((p:any) => p.primary_role==="creative_director" && !editCDs.find((x:any) => x.id===p.id))} value={null} onChange={(p:any) => setEditCDs([...editCDs, p])} onClear={() => {}} placeholder="Add creative director..." onCreateClick={(name:string) => setCreatePersonModal({name, role:"creative_director"})} />
                     </div>
                   </F>
 
                   <F label="" span2>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.text, userSelect: "none" }}>
-                      <input type="checkbox" checked={editIsCollab} onChange={e => setEditIsCollab(e.target.checked)} style={{ accentColor: C.white, cursor: "pointer" }} />
-                      This is a collaboration
-                      <span style={{ fontSize: 11, color: C.dim, fontStyle: "italic", marginLeft: 4 }}>— official co-creation between the brands above</span>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: editBrand?"pointer":"default", fontSize: 13, color: editBrand ? C.text : C.dim, userSelect: "none" }}>
+                      <input type="checkbox" checked={editCourtesy} disabled={!editBrand} onChange={e => { setEditCourtesy(e.target.checked); if(e.target.checked) setEditPhotogs([]); }} style={{ accentColor: C.white, cursor: "pointer" }} />
+                      Courtesy of brand
+                      {!editBrand && <span style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>— select a brand first</span>}
                     </label>
                   </F>
 
-                  {/* Contributors */}
-                  <F label="Contributors" span2>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {contributors.map(c => (
-                        <div key={c.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                          <Typeahead items={people} value={c.person} onChange={(p: any) => updateContributorPerson(c.key, p)} onClear={() => updateContributorPerson(c.key, null)} placeholder="Search or create person..." onCreateClick={(name: string) => setPersonModal({ name, role: (c.role?.slug || "creative-director").replace(/-/g, "_"), target: `contributor:${c.key}` })} />
-                          <Typeahead width={160} items={creditRoles} value={c.role} onChange={(r: any) => updateContributorRole(c.key, r)} onClear={() => updateContributorRole(c.key, null)} placeholder="Role..." onCreateClick={(name: string) => createRole(name, c.key)} />
-                          <button tabIndex={-1} onClick={() => removeContributor(c.key)} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer", padding: "0 4px", lineHeight: 1, flexShrink: 0 }}>×</button>
+                  {!editCourtesy && (
+                    <F label="Photographer" span2>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {editPhotogs.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                            {editPhotogs.map((p: any) => (
+                              <div key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: C.lift3, borderRadius: 10, padding: "5px 10px", fontSize: 13 }}>
+                                <span style={{ color: C.text, fontWeight: 500 }}>{p.name}</span>
+                                <button tabIndex={-1} onClick={() => setEditPhotogs(editPhotogs.filter((x:any) => x.id !== p.id))} style={{ background: "none", border: "none", color: C.muted, fontSize: 16, cursor: "pointer", padding: 0, lineHeight: 1 }}>×</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <Typeahead items={people.filter((p:any) => p.primary_role==="photographer" && !editPhotogs.find((x:any) => x.id===p.id))} value={null} onChange={(p:any) => setEditPhotogs([...editPhotogs, p])} onClear={() => {}} placeholder="Add photographer..." onCreateClick={(name:string) => setCreatePersonModal({name, role:"photographer"})} />
+                      </div>
+                    </F>
+                  )}
+
+                  <F label="Stylist" span2>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {editStylists.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                          {editStylists.map((p: any) => (
+                            <div key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: C.lift3, borderRadius: 10, padding: "5px 10px", fontSize: 13 }}>
+                              <span style={{ color: C.text, fontWeight: 500 }}>{p.name}</span>
+                              <button tabIndex={-1} onClick={() => setEditStylists(editStylists.filter((x:any) => x.id !== p.id))} style={{ background: "none", border: "none", color: C.muted, fontSize: 16, cursor: "pointer", padding: 0, lineHeight: 1 }}>×</button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                      <button onClick={addContributor} style={{ alignSelf: "flex-start", background: "transparent", border: `1.5px dashed ${C.lift3}`, color: C.muted, padding: "7px 14px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif" }}>+ Add contributor</button>
+                      )}
+                      <Typeahead items={people.filter((p:any) => p.primary_role==="stylist" && !editStylists.find((x:any) => x.id===p.id))} value={null} onChange={(p:any) => setEditStylists([...editStylists, p])} onClear={() => {}} placeholder="Add stylist..." onCreateClick={(name:string) => setCreatePersonModal({name, role:"stylist"})} />
                     </div>
                   </F>
 
+                  {/* CONTEXT */}
                   <SectionHead title="Context" />
 
                   <F label="Scene">
@@ -761,6 +684,7 @@ export default function ReviewQueue() {
                     </label>
                   </F>
 
+                  {/* LOCATION */}
                   <SectionHead title="Photo Location" />
 
                   <F label="City">
@@ -771,6 +695,7 @@ export default function ReviewQueue() {
                     <Typeahead items={countries} value={editPhotoCountry} onChange={setEditPhotoCountry} onClear={() => setEditPhotoCountry(null)} placeholder="Search country..." />
                   </F>
 
+                  {/* SOURCE */}
                   <SectionHead title="Source" />
 
                   <F label="Source Platform" span2>
@@ -793,6 +718,7 @@ export default function ReviewQueue() {
                     <Typeahead items={platforms} value={editPublication} onChange={setEditPublication} onClear={() => setEditPublication(null)} placeholder="e.g. Vogue, i-D, Dazed..." />
                   </F>
 
+                  {/* COLLECTION */}
                   <SectionHead title="Collection" />
 
                   <F label="Collection Title" span2>
@@ -803,13 +729,84 @@ export default function ReviewQueue() {
                     <textarea value={editCollectionDesc} onChange={e => setEditCollectionDesc(e.target.value)} rows={3} placeholder="Editorial narrative about this collection..." style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
                   </F>
 
+                  {/* NOTES */}
                   <SectionHead title="Notes" />
 
                   <F label="" span2>
-                    <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={2} placeholder="Internal scratchpad..." style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
+                    {!editingNotes ? (
+                      // View mode: render notes as formatted text with clickable URLs.
+                      // Click anywhere to switch to edit mode.
+                      <div
+                        onClick={() => setEditingNotes(true)}
+                        title="Click to edit"
+                        style={{
+                          ...inp,
+                          minHeight: 60,
+                          cursor: "text",
+                          lineHeight: 1.6,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          color: editNotes ? C.text : "#666",
+                          fontStyle: editNotes ? "normal" : "italic",
+                        }}
+                      >
+                        {editNotes
+                          ? editNotes.split("\n").map((line, i) => {
+                              // Split each line on URLs and render links inline.
+                              const URL_RE = /(https?:\/\/[^\s]+)/g;
+                              const parts = line.split(URL_RE);
+                              return (
+                                <span key={i}>
+                                  {parts.map((part, j) =>
+                                    /^https?:\/\/[^\s]+$/.test(part) ? (
+                                      <a
+                                        key={j}
+                                        href={part}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        onClick={e => e.stopPropagation()}
+                                        style={{
+                                          color: "#4a9eff",
+                                          textDecoration: "none",
+                                          wordBreak: "break-all",
+                                        }}
+                                        onMouseEnter={e => (e.currentTarget.style.textDecoration = "underline")}
+                                        onMouseLeave={e => (e.currentTarget.style.textDecoration = "none")}
+                                      >
+                                        {part}
+                                      </a>
+                                    ) : (
+                                      <span key={j}>{part}</span>
+                                    )
+                                  )}
+                                  {i < editNotes.split("\n").length - 1 && "\n"}
+                                </span>
+                              );
+                            })
+                          : "Internal scratchpad… (click to edit)"}
+                      </div>
+                    ) : (
+                      // Edit mode: plain textarea. Blur auto-saves; Escape cancels.
+                      <textarea
+                        value={editNotes}
+                        autoFocus
+                        onChange={e => setEditNotes(e.target.value)}
+                        onBlur={() => setEditingNotes(false)}
+                        onKeyDown={e => {
+                          if (e.key === "Escape") {
+                            setEditNotes(selected?.notes || "");
+                            setEditingNotes(false);
+                          }
+                        }}
+                        rows={4}
+                        placeholder="Internal scratchpad..."
+                        style={{ ...inp, resize: "vertical", lineHeight: 1.6, outline: "1.5px solid #4a9eff" }}
+                      />
+                    )}
                   </F>
                 </div>
 
+                {/* Missing fields */}
                 {missingFields(selected).length > 0 && (
                   <div style={{ background: "#2a1f0a", border: "1px solid #5a3a0a", borderRadius: 10, padding: "10px 14px" }}>
                     <div style={{ fontSize: 12, color: C.amber, fontWeight: 600, marginBottom: 3 }}>Missing fields</div>
@@ -817,6 +814,7 @@ export default function ReviewQueue() {
                   </div>
                 )}
 
+                {/* Actions */}
                 <div style={{ display: "flex", gap: 10, paddingBottom: 20 }}>
                   <button onClick={saveEdits} disabled={saving}
                     style={{ background: C.white, border: "none", color: "#212121", padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
@@ -824,15 +822,21 @@ export default function ReviewQueue() {
                   </button>
                   {selected.status==="draft" && (
                     <button onClick={() => setStatus(selected.id,"published")} disabled={saving}
-                      style={{ background: C.green, border: "none", color: "#fff", padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>Publish</button>
+                      style={{ background: C.green, border: "none", color: "#fff", padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
+                      Publish
+                    </button>
                   )}
                   {selected.status==="published" && (
                     <button onClick={() => setStatus(selected.id,"archived","manual")} disabled={saving}
-                      style={{ background: "transparent", border: `1px solid ${C.lift2}`, color: C.muted, padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>Archive</button>
+                      style={{ background: "transparent", border: `1px solid ${C.lift2}`, color: C.muted, padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
+                      Archive
+                    </button>
                   )}
                   {selected.status==="archived" && (
                     <button onClick={() => setStatus(selected.id,"published")} disabled={saving}
-                      style={{ background: C.lift2, border: "none", color: C.text, padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>Restore</button>
+                      style={{ background: C.lift2, border: "none", color: C.text, padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
+                      Restore
+                    </button>
                   )}
                 </div>
               </div>
@@ -841,29 +845,17 @@ export default function ReviewQueue() {
         </div>
       </div>
 
-      {personModal && (
+      {createPersonModal && (
         <CreatePersonModal
-          initialName={personModal.name}
-          role={personModal.role}
-          roles={creditRoles}
-          onCreateRole={createRoleForModal}
-          onClose={() => setPersonModal(null)}
-          onSave={(created: any) => {
-            setPeople(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-            if (personModal.target.startsWith("contributor:")) updateContributorPerson(personModal.target.split(":")[1], created);
-            setPersonModal(null);
-          }}
-        />
-      )}
-
-      {brandModal && (
-        <CreateBrandModal
-          initialName={brandModal.name}
-          onClose={() => setBrandModal(null)}
-          onSave={(created: any) => {
-            setBrands(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-            if (brandModal.target.startsWith("brandrow:")) updateBrandRow(brandModal.target.split(":")[1], created);
-            setBrandModal(null);
+          initialName={createPersonModal.name}
+          role={createPersonModal.role}
+          onClose={() => setCreatePersonModal(null)}
+          onSave={async (created: any) => {
+            setPeople(prev => [...prev, created]);
+            if (createPersonModal.role === "creative_director") setEditCDs(prev => [...prev, created]);
+            else if (createPersonModal.role === "photographer") setEditPhotogs(prev => [...prev, created]);
+            else if (createPersonModal.role === "stylist") setEditStylists(prev => [...prev, created]);
+            setCreatePersonModal(null);
           }}
         />
       )}
