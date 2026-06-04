@@ -705,14 +705,13 @@ export default function ReviewQueue() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.lift1}` }}>
-                    {["Image","Brands","Scene","Season","Credits","Tags","Missing","Status",""].map(h => (
+                    {["Image","Brands","Scene","Credits","Tags","Status",""].map(h => (
                       <th key={h} style={{ padding: "8px 10px", fontSize: 11, fontWeight: 600, color: C.muted, textAlign: "left", letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredLooks.map(look => {
-                    const missing = missingFields(look);
                     const isActive = selected?.id === look.id;
                     return (
                       <tr key={look.id} className={`look-row${isActive?" active":""}`}
@@ -728,14 +727,8 @@ export default function ReviewQueue() {
                           {look.source_name && !look.brands_display && <div style={{ fontSize: 11, color: C.muted }}>{look.source_name}</div>}
                         </td>
                         <td style={{ padding: "6px 10px" }}><span style={{ fontSize: 12, color: look.scene ? C.text : C.dim }}>{look.scene || "—"}</span></td>
-                        <td style={{ padding: "6px 10px", whiteSpace: "nowrap" }}><span style={{ fontSize: 12, color: look.season_display ? C.text : C.dim }}>{look.season_display || (look.season_year?.toString()) || "—"}</span></td>
                         <td style={{ padding: "6px 10px" }}><span style={{ fontSize: 12, color: look.credit_count > 0 ? C.green : C.dim }}>{look.credit_count}</span></td>
                         <td style={{ padding: "6px 10px" }}><span style={{ fontSize: 12, color: look.tag_count > 0 ? C.text : C.dim }}>{look.tag_count}</span></td>
-                        <td style={{ padding: "6px 10px", maxWidth: 140 }}>
-                          {missing.length > 0
-                            ? <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>{missing.map(m => <span key={m} style={{ fontSize: 10, background: "#3a2a1a", color: C.amber, padding: "1px 6px", borderRadius: 10, fontWeight: 500 }}>{m}</span>)}</div>
-                            : <span style={{ fontSize: 12, color: C.green }}>✓</span>}
-                        </td>
                         <td style={{ padding: "6px 10px", whiteSpace: "nowrap" }}>
                           <span style={{ fontSize: 11, color: look.status==="draft" ? C.amber : look.status==="published" ? C.green : C.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{look.status}</span>
                           {look.is_key_look && <span style={{ marginLeft: 5, fontSize: 10, color: C.white, background: C.lift2, padding: "1px 5px", borderRadius: 10 }}>key</span>}
