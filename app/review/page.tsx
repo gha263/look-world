@@ -460,10 +460,15 @@ export default function ReviewQueue() {
   function updateContributorPerson(key: string, person: any) {
     setContributors(prev => prev.map(c => {
       if (c.key !== key) return c;
+      // primary_role may be stored as either the role name ("assistant stylist") for new
+      // people, or as a legacy underscored slug ("creative_director") for older records.
+      // Match by name first, then fall back to slug for legacy.
       let role = c.role;
       if (!role && person?.primary_role) {
-        const slug = person.primary_role.replace(/_/g, "-");
-        const match = creditRoles.find((r: any) => r.slug === slug);
+        const pr = person.primary_role;
+        const match = creditRoles.find((r: any) =>
+          r.name === pr || r.slug === pr.replace(/_/g, "-")
+        );
         if (match) role = match;
       }
       return { ...c, person, role };
