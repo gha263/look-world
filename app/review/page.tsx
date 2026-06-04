@@ -299,6 +299,12 @@ type Look = {
 type Contributor = { key: string; role: any; person: any };
 type BrandRow = { key: string; brand: any; isCourtesy: boolean };
 
+// ── Contributor clipboard ─────────────────────────────────────────────────────
+// Module-level (not state) so it persists across look navigation for the session.
+// Holds contributor rows (person + role) copied from one look, ready to paste into others.
+// Creative director role is always excluded on paste — it belongs to the brand, not the shoot.
+let contributorClipboard: { person: any; role: any }[] = [];
+
 export default function ReviewQueue() {
   const [looks, setLooks] = useState<Look[]>([]);
   const [loading, setLoading] = useState(true);
@@ -455,6 +461,33 @@ export default function ReviewQueue() {
   function addContributor() {
     // Start blank — name first, role auto-fills when person is selected
     setContributors(prev => [...prev, { key: `c-new-${Date.now()}-${prev.length}`, role: null, person: null }]);
+  }
+
+  const [clipboardFlash, setClipboardFlash] = useState(false);
+
+  function copyContributors() {
+    // Snapshot valid rows (person + role both set) into the module-level clipboard.
+    // Does NOT exclude creative director here — exclusion happens on paste,
+    // so the copy is a faithful snapshot and paste semantics are explicit.
+    contributorClipboard = contributors
+      .filter(c => c.person?.id && c.role)
+      .map(c => ({ person: c.person, role: c.role }));
+    setClipboardFlash(true);
+    setTimeout(() => setClipboardFlash(false), 1800);
+  }
+
+  function pasteContributors() {
+    if (contributorClipboard.length === 0) return;
+    setContributors(prev => {
+      const existing = new Set(prev.map(c => `${c.person?.id}::${c.role?.name}`));
+      const toAdd = contributorClipboard
+        // Skip creative director — it belongs to the brand, not the shared shoot crew
+        .filter(c => c.role?.name !== "creative director")
+        // Deduplicate against already-present person+role pairs
+        .filter(c => !existing.has(`${c.person?.id}::${c.role?.name}`))
+        .map(c => ({ key: `c-paste-${c.person.id}-${Date.now()}-${Math.random()}`, person: c.person, role: c.role }));
+      return [...prev, ...toAdd];
+    });
   }
   function updateContributorRole(key: string, role: any) { setContributors(prev => prev.map(c => c.key === key ? { ...c, role } : c)); }
   function updateContributorPerson(key: string, person: any) {
@@ -766,6 +799,19 @@ export default function ReviewQueue() {
                   {/* Contributors */}
                   <F label="Contributors" span2>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {/* Copy / Paste toolbar */}
+                      <div style={{ display: "flex", gap: 8, marginBottom: 2 }}>
+                        <button onClick={copyContributors} disabled={contributors.filter(c => c.person?.id && c.role).length === 0}
+                          style={{ background: clipboardFlash ? C.green : C.lift2, border: "none", color: clipboardFlash ? "#fff" : C.muted, padding: "5px 12px", fontSize: 12, cursor: "pointer", borderRadius: 16, fontFamily: "Inter,sans-serif", transition: "all 0.2s", opacity: contributors.filter(c => c.person?.id && c.role).length === 0 ? 0.35 : 1 }}>
+                          {clipboardFlash ? "Copied ✓" : "Copy contributors"}
+                        </button>
+                        {contributorClipboard.length > 0 && (
+                          <button onClick={pasteContributors}
+                            style={{ background: C.lift2, border: `1px solid ${C.lift3}`, color: C.text, padding: "5px 12px", fontSize: 12, cursor: "pointer", borderRadius: 16, fontFamily: "Inter,sans-serif" }}>
+                            Paste ({contributorClipboard.filter(c => c.role?.name !== "creative director").length})
+                          </button>
+                        )}
+                      </div>
                       {contributors.map(c => (
                         <div key={c.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           <Typeahead items={people} value={c.person} onChange={(p: any) => updateContributorPerson(c.key, p)} onClear={() => updateContributorPerson(c.key, null)} placeholder="Search or create person..." onCreateClick={(name: string) => setPersonModal({ name, role: (c.role?.slug || "creative-director").replace(/-/g, "_"), target: `contributor:${c.key}` })} />
