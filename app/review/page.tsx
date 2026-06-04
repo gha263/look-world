@@ -300,9 +300,7 @@ type Contributor = { key: string; role: any; person: any };
 type BrandRow = { key: string; brand: any; isCourtesy: boolean };
 
 // ── Contributor clipboard ─────────────────────────────────────────────────────
-// Module-level (not state) so it persists across look navigation for the session.
-// Holds contributor rows (person + role) copied from one look, ready to paste into others.
-// Creative director role is always excluded on paste — it belongs to the brand, not the shoot.
+// Module-level so it persists across look navigation for the session.
 let contributorClipboard: { person: any; role: any }[] = [];
 
 export default function ReviewQueue() {
@@ -450,6 +448,7 @@ export default function ReviewQueue() {
     setEditPhotoCity(look.photo_city_id ? locations.find(l => l.id === look.photo_city_id) || null : null);
     setEditPhotoCountry(look.photo_country_id ? locations.find(l => l.id === look.photo_country_id) || null : null);
     loadDetail(look.id);
+    clearChecked();
   };
 
   // ── Row helpers ──
@@ -459,20 +458,30 @@ export default function ReviewQueue() {
   function removeBrandRow(key: string) { setBrandRows(prev => prev.filter(b => b.key !== key)); }
 
   function addContributor() {
-    // Start blank — name first, role auto-fills when person is selected
     setContributors(prev => [...prev, { key: `c-new-${Date.now()}-${prev.length}`, role: null, person: null }]);
   }
 
+  // ── Contributor clipboard (checkbox-based) ──
+  const [checkedContributors, setCheckedContributors] = useState<Set<string>>(new Set());
   const [clipboardFlash, setClipboardFlash] = useState(false);
 
+  // Clear checkboxes when a new look is selected
+  const clearChecked = () => setCheckedContributors(new Set());
+
+  function toggleContributorCheck(key: string) {
+    setCheckedContributors(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
   function copyContributors() {
-    // Snapshot valid rows (person + role both set) into the module-level clipboard.
-    // Does NOT exclude creative director here — exclusion happens on paste,
-    // so the copy is a faithful snapshot and paste semantics are explicit.
-    contributorClipboard = contributors
-      .filter(c => c.person?.id && c.role)
-      .map(c => ({ person: c.person, role: c.role }));
+    const selected = contributors.filter(c => checkedContributors.has(c.key) && c.person?.id && c.role);
+    if (selected.length === 0) return;
+    contributorClipboard = selected.map(c => ({ person: c.person, role: c.role }));
     setClipboardFlash(true);
+    clearChecked();
     setTimeout(() => setClipboardFlash(false), 1800);
   }
 
@@ -481,9 +490,6 @@ export default function ReviewQueue() {
     setContributors(prev => {
       const existing = new Set(prev.map(c => `${c.person?.id}::${c.role?.name}`));
       const toAdd = contributorClipboard
-        // Skip creative director — it belongs to the brand, not the shared shoot crew
-        .filter(c => c.role?.name !== "creative director")
-        // Deduplicate against already-present person+role pairs
         .filter(c => !existing.has(`${c.person?.id}::${c.role?.name}`))
         .map(c => ({ key: `c-paste-${c.person.id}-${Date.now()}-${Math.random()}`, person: c.person, role: c.role }));
       return [...prev, ...toAdd];
@@ -799,24 +805,47 @@ export default function ReviewQueue() {
                   {/* Contributors */}
                   <F label="Contributors" span2>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {/* Copy / Paste toolbar */}
-                      <div style={{ display: "flex", gap: 8, marginBottom: 2 }}>
-                        <button onClick={copyContributors} disabled={contributors.filter(c => c.person?.id && c.role).length === 0}
-                          style={{ background: clipboardFlash ? C.green : C.lift2, border: "none", color: clipboardFlash ? "#fff" : C.muted, padding: "5px 12px", fontSize: 12, cursor: "pointer", borderRadius: 16, fontFamily: "Inter,sans-serif", transition: "all 0.2s", opacity: contributors.filter(c => c.person?.id && c.role).length === 0 ? 0.35 : 1 }}>
-                          {clipboardFlash ? "Copied ✓" : "Copy contributors"}
+                      {/* Toolbar */}
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <button
+                          onClick={copyContributors}
+                          disabled={checkedContributors.size === 0}
+                          style={{ background: clipboardFlash ? C.green : C.lift2, border: "none", color: clipboardFlash ? "#fff" : C.muted, padding: "5px 12px", fontSize: 12, cursor: checkedContributors.size === 0 ? "default" : "pointer", borderRadius: 16, fontFamily: "Inter,sans-serif", transition: "all 0.2s", opacity: checkedContributors.size === 0 ? 0.35 : 1 }}>
+                          {clipboardFlash ? "Copied ✓" : `Copy${checkedContributors.size > 0 ? ` (${checkedContributors.size})` : ""}`}
                         </button>
+                        {checkedContributors.size > 0 && (
+                          <button
+                            onClick={() => {
+                              setContributors(prev => prev.filter(c => !checkedContributors.has(c.key)));
+                              clearChecked();
+                            }}
+                            style={{ background: "none", border: `1px solid ${C.red}`, color: C.red, padding: "5px 12px", fontSize: 12, cursor: "pointer", borderRadius: 16, fontFamily: "Inter,sans-serif" }}>
+                            Delete ({checkedContributors.size})
+                          </button>
+                        )}
                         {contributorClipboard.length > 0 && (
                           <button onClick={pasteContributors}
                             style={{ background: C.lift2, border: `1px solid ${C.lift3}`, color: C.text, padding: "5px 12px", fontSize: 12, cursor: "pointer", borderRadius: 16, fontFamily: "Inter,sans-serif" }}>
-                            Paste ({contributorClipboard.filter(c => c.role?.name !== "creative director").length})
+                            Paste ({contributorClipboard.length})
+                          </button>
+                        )}
+                        {checkedContributors.size > 0 && (
+                          <button onClick={clearChecked}
+                            style={{ background: "none", border: "none", color: C.dim, fontSize: 12, cursor: "pointer", fontFamily: "Inter,sans-serif", padding: "5px 0" }}>
+                            Clear
                           </button>
                         )}
                       </div>
                       {contributors.map(c => (
                         <div key={c.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <input
+                            type="checkbox"
+                            checked={checkedContributors.has(c.key)}
+                            onChange={() => toggleContributorCheck(c.key)}
+                            style={{ accentColor: C.white, width: 14, height: 14, cursor: "pointer", flexShrink: 0 }}
+                          />
                           <Typeahead items={people} value={c.person} onChange={(p: any) => updateContributorPerson(c.key, p)} onClear={() => updateContributorPerson(c.key, null)} placeholder="Search or create person..." onCreateClick={(name: string) => setPersonModal({ name, role: (c.role?.slug || "creative-director").replace(/-/g, "_"), target: `contributor:${c.key}` })} />
                           <Typeahead width={160} items={creditRoles} value={c.role} onChange={(r: any) => updateContributorRole(c.key, r)} onClear={() => updateContributorRole(c.key, null)} placeholder="Role..." onCreateClick={(name: string) => createRole(name, c.key)} />
-                          <button tabIndex={-1} onClick={() => removeContributor(c.key)} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer", padding: "0 4px", lineHeight: 1, flexShrink: 0 }}>×</button>
                         </div>
                       ))}
                       <button onClick={addContributor} style={{ alignSelf: "flex-start", background: "transparent", border: `1.5px dashed ${C.lift3}`, color: C.muted, padding: "7px 14px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif" }}>+ Add contributor</button>
