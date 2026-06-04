@@ -479,12 +479,15 @@ export default function IntakePage() {
     setContributors(prev => prev.map(c => {
       if (c.key !== key) return c;
       // Auto-fill role from person's primary_role if role slot is currently empty.
-      // Maps primary_role underscore format (e.g. "creative_director") to a credit_roles
-      // object by matching slug hyphen format (e.g. "creative-director"). Stays editable after.
+      // primary_role may be stored as either the role name ("assistant stylist") for new
+      // people created via the modal, or as a legacy underscored slug ("creative_director")
+      // for older records. Match by name first, then fall back to slug for legacy.
       let role = c.role;
       if (!role && person?.primary_role) {
-        const slug = person.primary_role.replace(/_/g, "-");
-        const match = creditRoles.find((r: any) => r.slug === slug);
+        const pr = person.primary_role;
+        const match = creditRoles.find((r: any) =>
+          r.name === pr || r.slug === pr.replace(/_/g, "-")
+        );
         if (match) role = match;
       }
       return { ...c, person, role };
