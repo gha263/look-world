@@ -293,7 +293,8 @@ type Look = {
   // Derived from look_brand_credits embed
   brands_display: string;
   brand_count: number;
-  credit_count: number; tag_count: number;
+  credit_count: number;
+  tag_count: number;
 };
 
 type Contributor = { key: string; role: any; person: any };
@@ -382,18 +383,11 @@ export default function ReviewQueue() {
       // Filtering by look IDs avoids hitting the default PostgREST 1000-row limit on the
       // full entity_tags table. Range header allows up to 50k rows (covers 1000 looks
       // at ~50 tags each comfortably).
-      const data = await sb(`looks?${filter}select=id,status,cloudinary_url,source_url,source_name,source_platform_id,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,is_collaboration,event_id,photo_city_id,photo_country_id,collection_title,collection_description,publication_id,publication_issue_month,publication_issue_year,look_brand_credits(brand_id,credit_order,brands(name)),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`);
+      const data = await sb(`looks?${filter}select=id,status,cloudinary_url,source_url,source_name,source_platform_id,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,is_collaboration,event_id,photo_city_id,photo_country_id,collection_title,collection_description,publication_id,publication_issue_month,publication_issue_year,tag_count,look_brand_credits(brand_id,credit_order,brands(name)),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`);
 
-      const tagCountMap: Record<string, number> = {};
-      if (data.length > 0) {
-        const lookIds = data.map((l: any) => l.id).join(",");
-        const tagRows = await fetch(
-          `${SUPABASE_URL}/rest/v1/entity_tags?entity_id=in.(${lookIds})&entity_type=eq.look&select=entity_id`,
-          { headers: { ...H, "Range-Unit": "items", "Range": "0-49999" } }
-        ).then(r => r.json());
-        (tagRows || []).forEach((t: any) => { tagCountMap[t.entity_id] = (tagCountMap[t.entity_id] || 0) + 1; });
-      }
-
+      // tag_count is now a denormalized column on looks (maintained by trigger).
+      // No separate entity_tags round trip needed — eliminates the serial fetch
+      // that was the main bottleneck for published looks (550 looks × 13k tag rows).
       setLooks(data.map((l: any) => {
         const rows = (l.look_brand_credits || []).slice().sort((a: any, b: any) => (a.credit_order ?? 0) - (b.credit_order ?? 0));
         const names = rows.map((r: any) => r.brands?.name).filter(Boolean);
@@ -402,7 +396,7 @@ export default function ReviewQueue() {
           brands_display: l.is_collaboration && names.length >= 2 ? names.join(" × ") : names.join(", "),
           brand_count: rows.length,
           credit_count: l.look_credits?.length || 0,
-          tag_count: tagCountMap[l.id] || 0,
+          tag_count: l.tag_count || 0,
         };
       }));
     } catch(e: any) { console.error(e); setLoadError(e?.message || "Failed to load looks."); }
