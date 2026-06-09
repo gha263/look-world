@@ -203,6 +203,7 @@ function CreateBrandModal({ initialName, onSave, onClose }: any) {
 
 function CreatePlatformModal({ initialName, onSave, onClose }: any) {
   const [name, setName] = useState(initialName || "");
+  const [pubType, setPubType] = useState("magazine");
   const [ig, setIg] = useState("");
   const [website, setWebsite] = useState("");
   const [saving, setSaving] = useState(false);
@@ -211,10 +212,10 @@ function CreatePlatformModal({ initialName, onSave, onClose }: any) {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      const result = await fetch(`${SUPABASE_URL}/rest/v1/source_platforms`, {
+      const result = await fetch(`${SUPABASE_URL}/rest/v1/publications`, {
         method: "POST",
         headers: { ...H, Prefer: "return=representation" },
-        body: JSON.stringify({ name: name.trim(), slug: slugify(name), instagram_handle: ig.trim() || null, website: website.trim() || null }),
+        body: JSON.stringify({ name: name.trim(), slug: slugify(name), publication_type: pubType, instagram_handle: ig.trim() || null, website: website.trim() || null }),
       });
       if (!result.ok) throw new Error(await result.text());
       const [created] = await result.json();
@@ -237,6 +238,15 @@ function CreatePlatformModal({ initialName, onSave, onClose }: any) {
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             <label style={lbl}>Name *</label>
             <input value={name} onChange={e => setName(e.target.value)} autoFocus style={inp2} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <label style={lbl}>Type</label>
+            <select value={pubType} onChange={e => setPubType(e.target.value)} style={{ ...inp2, cursor: "pointer" }}>
+              <option value="magazine">Magazine</option>
+              <option value="digital">Digital</option>
+              <option value="newspaper">Newspaper</option>
+              <option value="trade">Trade</option>
+            </select>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             <label style={lbl}>Instagram Handle</label>
@@ -319,6 +329,7 @@ export default function ReviewQueue() {
   const [events, setEvents] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [platforms, setPlatforms] = useState<any[]>([]);
+  const [pubList, setPubList] = useState<any[]>([]);
   const [creditRoles, setCreditRoles] = useState<any[]>([]);
 
   // Edit state
@@ -357,15 +368,17 @@ export default function ReviewQueue() {
 
   const loadEntities = async () => {
     try {
-      const [b, p, e, l, pl, cr] = await Promise.all([
+      const [b, p, e, l, pl, cr, pubs] = await Promise.all([
         sb("brands?select=id,name&order=name"),
         sb("people?select=id,name,primary_role&order=name"),
         sb("events?select=id,name,event_type&order=name"),
         sb("locations?select=id,name,location_type&order=location_type,name"),
         sb("source_platforms?select=id,name,slug&order=name"),
         sb("credit_roles?select=id,slug,name,sort_order&order=sort_order"),
+        sb("publications?select=id,name,slug,publication_type,country_id&order=name"),
       ]);
       setBrands(b); setPeople(p); setEvents(e); setLocations(l); setPlatforms(pl); setCreditRoles(cr);
+      if (Array.isArray(pubs)) setPubList(pubs);
     } catch(e) { console.error(e); }
   };
 
@@ -430,7 +443,7 @@ export default function ReviewQueue() {
     setEditSourceName(look.source_name || "");
     setEditSourcePlatform(look.source_platform_id ? platforms.find(p => p.id === look.source_platform_id) || null : null);
     setEditCloudinaryUrl(look.cloudinary_url || "");
-    setEditPublication(look.publication_id ? platforms.find(p => p.id === look.publication_id) || null : null);
+    setEditPublication(look.publication_id ? pubList.find(p => p.id === look.publication_id) || null : null);
     setEditPublicationIssueMonth(look.publication_issue_month?.toString() || "");
     setEditPublicationIssueYear(look.publication_issue_year?.toString() || "");
     setEditCollectionTitle(look.collection_title || "");
@@ -923,7 +936,7 @@ export default function ReviewQueue() {
                   </F>
 
                   <F label="Publication" span2>
-                    <Typeahead items={platforms} value={editPublication} onChange={setEditPublication} onClear={() => { setEditPublication(null); setEditPublicationIssueMonth(""); setEditPublicationIssueYear(""); }} placeholder="e.g. Vogue, i-D, Dazed..." onCreateClick={(name: string) => setPublicationModal(name)} />
+                    <Typeahead items={pubList} value={editPublication} onChange={setEditPublication} onClear={() => { setEditPublication(null); setEditPublicationIssueMonth(""); setEditPublicationIssueYear(""); }} placeholder="e.g. Vogue, i-D, Dazed..." onCreateClick={(name: string) => setPublicationModal(name)} />
                   </F>
 
                   <F label="Issue Month">
@@ -1022,7 +1035,7 @@ export default function ReviewQueue() {
           initialName={publicationModal}
           onClose={() => setPublicationModal(null)}
           onSave={(created: any) => {
-            setPlatforms(prev => [...prev, created].sort((a: any, b: any) => a.name.localeCompare(b.name)));
+            setPubList(prev => [...prev, created].sort((a: any, b: any) => a.name.localeCompare(b.name)));
             setEditPublication(created);
             setPublicationModal(null);
           }}
