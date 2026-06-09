@@ -144,10 +144,12 @@ function CreatePersonModal({ initialName, role, roles, onSave, onClose, onCreate
   );
 }
 
-function CreateBrandModal({ initialName, onSave, onClose }: any) {
+function CreateBrandModal({ initialName, locations, onSave, onClose }: any) {
   const [name, setName] = useState(initialName || "");
   const [ig, setIg] = useState("");
   const [website, setWebsite] = useState("");
+  const [country, setCountry] = useState<any>(null);
+  const [city, setCity] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -157,7 +159,7 @@ function CreateBrandModal({ initialName, onSave, onClose }: any) {
       const result = await fetch(`${SUPABASE_URL}/rest/v1/brands`, {
         method: "POST",
         headers: { ...H, Prefer: "return=representation" },
-        body: JSON.stringify({ name: name.trim(), slug: slugify(name), instagram_handle: ig.trim() || null, website: website.trim() || null }),
+        body: JSON.stringify({ name: name.trim(), slug: slugify(name), instagram_handle: ig.trim() || null, website: website.trim() || null, country_id: country?.id || null, city_id: city?.id || null }),
       });
       if (!result.ok) throw new Error(await result.text());
       const [created] = await result.json();
@@ -168,6 +170,9 @@ function CreateBrandModal({ initialName, onSave, onClose }: any) {
 
   const inp2 = { background: C.lift3, border: "none" as const, color: "#ececec", padding: "9px 12px", fontSize: 13, borderRadius: 10, outline: "none", width: "100%", boxSizing: "border-box" as const, fontFamily: "Inter,sans-serif" };
   const lbl = { fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase" as const, letterSpacing: "0.07em" };
+
+  const countries = (locations || []).filter((l: any) => l.location_type === "country");
+  const cities = (locations || []).filter((l: any) => l.location_type === "city");
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
@@ -188,6 +193,14 @@ function CreateBrandModal({ initialName, onSave, onClose }: any) {
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             <label style={lbl}>Website</label>
             <input value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." style={inp2} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <label style={lbl}>Country</label>
+            <Typeahead items={countries} value={country} onChange={setCountry} onClear={() => setCountry(null)} placeholder="Search country..." />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <label style={lbl}>City</label>
+            <Typeahead items={cities} value={city} onChange={setCity} onClear={() => setCity(null)} placeholder="Search city..." />
           </div>
         </div>
         <div style={{ padding: "14px 20px", borderTop: `1px solid ${C.lift2}`, display: "flex", justifyContent: "flex-end", gap: 10 }}>
@@ -844,7 +857,7 @@ export default function ReviewQueue() {
                             onChange={() => toggleContributorCheck(c.key)}
                             style={{ accentColor: C.white, width: 14, height: 14, cursor: "pointer", flexShrink: 0 }}
                           />
-                          <Typeahead items={people} value={c.person} onChange={(p: any) => updateContributorPerson(c.key, p)} onClear={() => updateContributorPerson(c.key, null)} placeholder="Search or create person..." onCreateClick={(name: string) => setPersonModal({ name, role: (c.role?.slug || "creative-director").replace(/-/g, "_"), target: `contributor:${c.key}` })} />
+                          <Typeahead items={people} value={c.person} onChange={(p: any) => updateContributorPerson(c.key, p)} onClear={() => updateContributorPerson(c.key, null)} placeholder="Search or create person..." onCreateClick={(name: string) => setPersonModal({ name, role: c.role?.slug ? c.role.slug.replace(/-/g, "_") : null, target: `contributor:${c.key}` })} />
                           <Typeahead width={160} items={creditRoles} value={c.role} onChange={(r: any) => updateContributorRole(c.key, r)} onClear={() => updateContributorRole(c.key, null)} placeholder="Role..." onCreateClick={(name: string) => createRole(name, c.key)} />
                         </div>
                       ))}
@@ -1021,6 +1034,7 @@ export default function ReviewQueue() {
       {brandModal && (
         <CreateBrandModal
           initialName={brandModal.name}
+          locations={locations}
           onClose={() => setBrandModal(null)}
           onSave={(created: any) => {
             setBrands(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
