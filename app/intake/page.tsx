@@ -814,7 +814,7 @@ export default function IntakePage() {
                       onChange={(p: any) => updateContributorPerson(c.key, p)}
                       onClear={() => updateContributorPerson(c.key, null)}
                       placeholder="Search or create person..."
-                      onCreateClick={(name: string) => setModal({ type: "person", name, role: (c.role?.slug || "creative-director").replace(/-/g, "_"), target: `contributor:${c.key}` })}
+                      onCreateClick={(name: string) => setModal({ type: "person", name, role: c.role?.slug ? c.role.slug.replace(/-/g, "_") : null, target: `contributor:${c.key}` })}
                     />
                     <InlineTypeahead
                       width={180}
