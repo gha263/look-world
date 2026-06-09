@@ -319,17 +319,42 @@ function CreateLocationModal({ initialName, type, locations, onSave, onClose }: 
   );
 }
 
+function CreatePublicationModal({ initialName, locations, onSave, onClose }: any) {
+  const [name, setName] = useState(initialName || "");
+  const [pubType, setPubType] = useState("magazine");
+  const [ig, setIg] = useState("");
+  const [website, setWebsite] = useState("");
+  const [country, setCountry] = useState<any>(null);
+  return (
+    <Modal title="New Publication" onClose={onClose} saveDisabled={!name.trim()}
+      onSave={() => onSave({ name: name.trim(), slug: slugify(name), publication_type: pubType, instagram_handle: ig || null, website: website || null, country_id: country?.id || null })}>
+      <F label="Name *"><input style={s.input} value={name} onChange={e => setName(e.target.value)} autoFocus /></F>
+      <F label="Type">
+        <select style={s.select} value={pubType} onChange={e => setPubType(e.target.value)}>
+          <option value="magazine">Magazine</option>
+          <option value="digital">Digital</option>
+          <option value="newspaper">Newspaper</option>
+          <option value="trade">Trade</option>
+        </select>
+      </F>
+      <Typeahead label="Country" items={locations.filter((l: any) => l.location_type === "country")} value={country} onChange={setCountry} onClear={() => setCountry(null)} />
+      <F label="Instagram Handle"><input style={s.input} value={ig} onChange={e => setIg(e.target.value)} placeholder="@vogue" /></F>
+      <F label="Website"><input style={s.input} value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://vogue.com" /></F>
+    </Modal>
+  );
+}
+
 function CreatePlatformModal({ initialName, onSave, onClose }: any) {
   const [name, setName] = useState(initialName || "");
   const [url, setUrl] = useState("");
   const [website, setWebsite] = useState("");
   const [ig, setIg] = useState("");
   return (
-    <Modal title="New Publication / Platform" onClose={onClose} saveDisabled={!name.trim()}
+    <Modal title="New Platform" onClose={onClose} saveDisabled={!name.trim()}
       onSave={() => onSave({ name: name.trim(), base_url: url || null, website: website || null, instagram_handle: ig || null, slug: slugify(name) })}>
       <F label="Name *"><input style={s.input} value={name} onChange={e => setName(e.target.value)} autoFocus /></F>
-      <F label="Website"><input style={s.input} value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://vogue.com" /></F>
-      <F label="Instagram Handle"><input style={s.input} value={ig} onChange={e => setIg(e.target.value)} placeholder="@vogue" /></F>
+      <F label="Website"><input style={s.input} value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." /></F>
+      <F label="Instagram Handle"><input style={s.input} value={ig} onChange={e => setIg(e.target.value)} placeholder="@handle" /></F>
       <F label="Base URL"><input style={s.input} value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." /></F>
     </Modal>
   );
@@ -377,6 +402,7 @@ export default function IntakePage() {
   const [events, setEvents] = useState(EVENTS_SEED);
   const [locations, setLocations] = useState(LOCATIONS_SEED);
   const [platforms, setPlatforms] = useState(PLATFORMS);
+  const [publications, setPublications] = useState<any[]>([]);
   const [creditRoles, setCreditRoles] = useState(CREDIT_ROLES_SEED);
   const [sourceNames, setSourceNames] = useState<string[]>([]);
 
@@ -389,7 +415,7 @@ export default function IntakePage() {
   useEffect(() => {
     async function loadEntities() {
       try {
-        const [b, p, e, l, pl, cr, sn] = await Promise.all([
+        const [b, p, e, l, pl, cr, sn, pubs] = await Promise.all([
           fetch(`${SUPABASE_URL}/rest/v1/brands?select=id,name,slug&order=name`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
           fetch(`${SUPABASE_URL}/rest/v1/people?select=id,name,primary_role&order=name`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
           fetch(`${SUPABASE_URL}/rest/v1/events?select=id,name,event_type&order=name`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
@@ -397,6 +423,7 @@ export default function IntakePage() {
           fetch(`${SUPABASE_URL}/rest/v1/source_platforms?select=id,name,slug&order=name`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
           fetch(`${SUPABASE_URL}/rest/v1/credit_roles?select=id,slug,name,sort_order&order=sort_order`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
           fetch(`${SUPABASE_URL}/rest/v1/looks?select=source_name&not=source_name.is.null&order=source_name`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
+          fetch(`${SUPABASE_URL}/rest/v1/publications?select=id,name,slug,publication_type,country_id&order=name`, { headers: {...H, "Range-Unit":"items", "Range":"0-9999"} }).then(r => r.json()),
         ]);
         if (Array.isArray(b) && b.length > 0) setBrands(b);
         if (Array.isArray(p) && p.length > 0) setPeople(p);
@@ -408,6 +435,7 @@ export default function IntakePage() {
           const unique = [...new Set(sn.map((r: any) => r.source_name?.trim()).filter(Boolean))].sort();
           setSourceNames(unique);
         }
+        if (Array.isArray(pubs) && pubs.length > 0) setPublications(pubs);
       } catch (err) {
         console.error("Failed to load entities:", err);
       }
@@ -549,8 +577,8 @@ export default function IntakePage() {
     setCustomPlatform(c); setPlatformId(""); setModal(null);
   }
   async function handleCreatePublication(data: any) {
-    let c; try { c = await post("source_platforms", data); } catch { c = { ...data, id: `local-${Date.now()}` }; }
-    setPlatforms(p => [...p, c].sort((a: any, b: any) => a.name.localeCompare(b.name)));
+    let c; try { c = await post("publications", data); } catch { c = { ...data, id: `local-${Date.now()}` }; }
+    setPublications(p => [...p, c].sort((a: any, b: any) => a.name.localeCompare(b.name)));
     setPublication(c); setModal(null);
   }
 
@@ -711,7 +739,7 @@ export default function IntakePage() {
                 </label>
               </div>
             </div>
-            <Typeahead label="Publication" items={platforms.filter((p: any) => p.id !== INSTAGRAM_ID && p.id !== BRAND_WEBSITE_ID)}
+            <Typeahead label="Publication" items={publications}
               value={publication} onChange={setPublication} onClear={() => { setPublication(null); setPublicationIssueMonth(""); setPublicationIssueYear(""); }}
               placeholder="e.g. Vogue, i-D, Dazed..."
               onCreateClick={(name: string) => setModal({ type: "publication", name })} />
@@ -893,7 +921,7 @@ export default function IntakePage() {
         {modal?.type === "city" && <CreateLocationModal initialName={modal.name} type="city" locations={locations} onSave={handleCreateLocation} onClose={() => setModal(null)} />}
         {modal?.type === "country" && <CreateLocationModal initialName={modal.name} type="country" locations={locations} onSave={handleCreateLocation} onClose={() => setModal(null)} />}
         {modal?.type === "platform" && <CreatePlatformModal initialName={modal.name} onSave={handleCreatePlatform} onClose={() => setModal(null)} />}
-        {modal?.type === "publication" && <CreatePlatformModal initialName={modal.name} onSave={handleCreatePublication} onClose={() => setModal(null)} />}
+        {modal?.type === "publication" && <CreatePublicationModal initialName={modal.name} locations={locations} onSave={handleCreatePublication} onClose={() => setModal(null)} />}
       </div>
     </>
   );
