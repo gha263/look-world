@@ -29,7 +29,7 @@ export default function Nav() {
       fontFamily: "Inter, sans-serif",
     }}>
       <span style={{ fontSize: 14, fontWeight: 700, color: "#ececec", marginRight: 24, letterSpacing: "0.05em" }}>
-        LOOK47
+        LOOK WORLD
       </span>
       {link("/", "Tag Studio")}
       {link("/intake", "Intake")}
