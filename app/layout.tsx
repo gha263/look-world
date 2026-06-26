@@ -3,8 +3,8 @@ import "./globals.css";
 import Nav from "./components/Nav";
 
 export const metadata: Metadata = {
-  title: "LOOK47 — Tag Studio",
-  description: "Internal tagging interface for Look 47",
+  title: "Look World — Studio",
+  description: "Internal tool for Look World",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
