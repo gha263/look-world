@@ -650,11 +650,42 @@ export default function ReviewQueue() {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by brand or account..."
             style={{ background: C.lift2, border: "none", color: C.text, padding: "7px 14px", fontSize: 13, borderRadius: 20, outline: "none", width: 240, fontFamily: "Inter,sans-serif" }} />
           <div style={{ flex: 1 }} />
-          {statusFilter === "draft" && !!counts.draft && (
-            <button onClick={publishAll} disabled={saving}
-              style={{ background: C.green, border: "none", color: "#fff", padding: "7px 18px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
-              Publish all drafts ({counts.draft})
-            </button>
+          {selected ? (
+            // Per-look actions — scoped to the look open in the detail panel
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: C.muted, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {selected.brands_display || selected.source_name || "—"}
+              </span>
+              {selected.status === "draft" && (
+                <button onClick={() => setStatus(selected.id, "published")} disabled={saving}
+                  style={{ background: C.green, border: "none", color: "#fff", padding: "6px 16px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
+                  Publish
+                </button>
+              )}
+              {selected.status === "published" && (
+                <button onClick={() => setStatus(selected.id, "archived", "manual")} disabled={saving}
+                  style={{ background: "transparent", border: `1px solid ${C.lift2}`, color: C.muted, padding: "6px 16px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
+                  Archive
+                </button>
+              )}
+              {selected.status === "archived" && (
+                <button onClick={() => setStatus(selected.id, "published")} disabled={saving}
+                  style={{ background: C.lift2, border: "none", color: C.text, padding: "6px 16px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
+                  Restore
+                </button>
+              )}
+              <button onClick={() => { setConfirmDelete(true); setDeleteError(null); }} disabled={deleting}
+                style={{ background: "transparent", border: `1px solid ${C.red}`, color: C.red, padding: "6px 16px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif" }}>
+                Delete
+              </button>
+            </div>
+          ) : (
+            statusFilter === "draft" && !!counts.draft && (
+              <button onClick={publishAll} disabled={saving}
+                style={{ background: C.green, border: "none", color: "#fff", padding: "7px 18px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
+                Publish all drafts ({counts.draft})
+              </button>
+            )
           )}
           <span style={{ fontSize: 12, color: C.muted }}>{filteredLooks.length} looks</span>
         </div>
@@ -711,9 +742,34 @@ export default function ReviewQueue() {
                           {look.is_key_look && <span style={{ marginLeft: 5, fontSize: 10, color: C.white, background: C.lift2, padding: "1px 5px", borderRadius: 10 }}>key</span>}
                         </td>
                         <td style={{ padding: "6px 10px" }} onClick={e => e.stopPropagation()}>
-                          {look.status==="draft" && <button onClick={() => setStatus(look.id,"published")} style={{ background: C.green, border: "none", color: "#fff", padding: "4px 10px", fontSize: 11, cursor: "pointer", borderRadius: 12, fontWeight: 600, fontFamily: "Inter,sans-serif" }}>Publish</button>}
-                          {look.status==="published" && <button onClick={() => setStatus(look.id,"archived","manual")} style={{ background: "transparent", border: `1px solid ${C.lift2}`, color: C.muted, padding: "4px 10px", fontSize: 11, cursor: "pointer", borderRadius: 12, fontFamily: "Inter,sans-serif" }}>Archive</button>}
-                          {look.status==="archived" && <button onClick={() => setStatus(look.id,"published")} style={{ background: "transparent", border: `1px solid ${C.lift2}`, color: C.muted, padding: "4px 10px", fontSize: 11, cursor: "pointer", borderRadius: 12, fontFamily: "Inter,sans-serif" }}>Restore</button>}
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            {look.status==="draft" && <button onClick={() => setStatus(look.id,"published")} style={{ background: C.green, border: "none", color: "#fff", padding: "4px 10px", fontSize: 11, cursor: "pointer", borderRadius: 12, fontWeight: 600, fontFamily: "Inter,sans-serif" }}>Publish</button>}
+                            {look.status==="published" && <button onClick={() => setStatus(look.id,"archived","manual")} style={{ background: "transparent", border: `1px solid ${C.lift2}`, color: C.muted, padding: "4px 10px", fontSize: 11, cursor: "pointer", borderRadius: 12, fontFamily: "Inter,sans-serif" }}>Archive</button>}
+                            {look.status==="archived" && <button onClick={() => setStatus(look.id,"published")} style={{ background: "transparent", border: `1px solid ${C.lift2}`, color: C.muted, padding: "4px 10px", fontSize: 11, cursor: "pointer", borderRadius: 12, fontFamily: "Inter,sans-serif" }}>Restore</button>}
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!confirm("Delete this look? Removes the Supabase record and Cloudinary image. Cannot be undone.")) return;
+                                try {
+                                  const res = await fetch("https://rsslbgfbdoqxgogbuuzc.supabase.co/functions/v1/delete-look", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ look_id: look.id }),
+                                  });
+                                  const data = await res.json();
+                                  if (data.success) {
+                                    setLooks(prev => prev.filter(l => l.id !== look.id));
+                                    setCounts(prev => ({ ...prev, [look.status]: Math.max(0, (prev[look.status] || 1) - 1) }));
+                                    if (selected?.id === look.id) setSelected(null);
+                                  } else {
+                                    alert(data.error || "Delete failed");
+                                  }
+                                } catch (err: any) { alert(err.message); }
+                              }}
+                              style={{ background: "transparent", border: `1px solid ${C.red}`, color: C.red, padding: "4px 10px", fontSize: 11, cursor: "pointer", borderRadius: 12, fontFamily: "Inter,sans-serif" }}>
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -734,6 +790,46 @@ export default function ReviewQueue() {
                 {selected.source_url && (
                   <a href={selected.source_url} target="_blank" rel="noreferrer"
                     style={{ position: "absolute", top: 10, left: 10, fontSize: 12, color: C.text, textDecoration: "none", background: "rgba(0,0,0,0.7)", padding: "5px 10px", borderRadius: 12, fontWeight: 500, fontFamily: "Inter,sans-serif" }}>↗ source</a>
+                )}
+              </div>
+
+              {/* Action bar — immediately visible, no scrolling needed */}
+              <div style={{ padding: "10px 18px", display: "flex", gap: 8, alignItems: "center", borderBottom: `1px solid ${C.lift1}`, flexShrink: 0, flexWrap: "wrap" }}>
+                {selected.status === "draft" && (
+                  <button onClick={() => setStatus(selected.id, "published")} disabled={saving}
+                    style={{ background: C.green, border: "none", color: "#fff", padding: "7px 18px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
+                    Publish
+                  </button>
+                )}
+                {selected.status === "published" && (
+                  <button onClick={() => setStatus(selected.id, "archived", "manual")} disabled={saving}
+                    style={{ background: "transparent", border: `1px solid ${C.lift2}`, color: C.muted, padding: "7px 18px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
+                    Archive
+                  </button>
+                )}
+                {selected.status === "archived" && (
+                  <button onClick={() => setStatus(selected.id, "published")} disabled={saving}
+                    style={{ background: C.lift2, border: "none", color: C.text, padding: "7px 18px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
+                    Restore
+                  </button>
+                )}
+                {!confirmDelete ? (
+                  <button onClick={() => { setConfirmDelete(true); setDeleteError(null); }} disabled={deleting}
+                    style={{ background: "transparent", border: `1px solid ${C.red}`, color: C.red, padding: "7px 18px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif" }}>
+                    Delete
+                  </button>
+                ) : (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <button onClick={deleteLook} disabled={deleting}
+                      style={{ background: C.red, border: "none", color: "#fff", padding: "7px 18px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: deleting ? 0.5 : 1 }}>
+                      {deleting ? "Deleting…" : "Delete permanently"}
+                    </button>
+                    <button onClick={() => { setConfirmDelete(false); setDeleteError(null); }}
+                      style={{ background: "none", border: "none", color: C.muted, fontSize: 13, cursor: "pointer", fontFamily: "Inter,sans-serif" }}>
+                      Cancel
+                    </button>
+                    {deleteError && <span style={{ fontSize: 12, color: C.red }}>{deleteError}</span>}
+                  </div>
                 )}
               </div>
 
@@ -928,56 +1024,12 @@ export default function ReviewQueue() {
                   </div>
                 )}
 
-                {/* Actions row */}
-                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", paddingBottom: 8 }}>
+                {/* Save — form fields only, status actions are at the top */}
+                <div style={{ paddingBottom: 20 }}>
                   <button onClick={saveEdits} disabled={saving}
                     style={{ background: C.white, border: "none", color: "#212121", padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
                     {saving ? "Saving…" : "Save changes"}
                   </button>
-                  {selected.status==="draft" && (
-                    <button onClick={() => setStatus(selected.id,"published")} disabled={saving}
-                      style={{ background: C.green, border: "none", color: "#fff", padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>Publish</button>
-                  )}
-                  {selected.status==="published" && (
-                    <button onClick={() => setStatus(selected.id,"archived","manual")} disabled={saving}
-                      style={{ background: "transparent", border: `1px solid ${C.lift2}`, color: C.muted, padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>Archive</button>
-                  )}
-                  {selected.status==="archived" && (
-                    <button onClick={() => setStatus(selected.id,"published")} disabled={saving}
-                      style={{ background: C.lift2, border: "none", color: C.text, padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>Restore</button>
-                  )}
-                </div>
-
-                {/* Delete section */}
-                <div style={{ borderTop: `1px solid ${C.lift1}`, paddingTop: 14, paddingBottom: 20 }}>
-                  {!confirmDelete ? (
-                    <button onClick={() => { setConfirmDelete(true); setDeleteError(null); }}
-                      style={{ background: "none", border: "none", color: C.dim, fontSize: 12, cursor: "pointer", fontFamily: "Inter,sans-serif", padding: "6px 0" }}>
-                      Delete look permanently
-                    </button>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      <div style={{ fontSize: 13, color: C.text }}>
-                        This removes the Supabase record, all credits and tags, and the Cloudinary image.
-                        <span style={{ color: C.red }}> Cannot be undone.</span>
-                      </div>
-                      {deleteError && (
-                        <div style={{ fontSize: 12, color: C.red, background: "rgba(224,90,78,0.1)", border: `1px solid ${C.red}`, borderRadius: 8, padding: "8px 12px" }}>
-                          {deleteError}
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <button onClick={deleteLook} disabled={deleting}
-                          style={{ background: C.red, border: "none", color: "#fff", padding: "8px 18px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: deleting ? 0.5 : 1 }}>
-                          {deleting ? "Deleting…" : "Delete permanently"}
-                        </button>
-                        <button tabIndex={-1} onClick={() => { setConfirmDelete(false); setDeleteError(null); }}
-                          style={{ background: "none", border: "none", color: C.muted, fontSize: 13, cursor: "pointer", fontFamily: "Inter,sans-serif" }}>
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
               </div>
