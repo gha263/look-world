@@ -4,11 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import { sb, H, SUPABASE_URL } from "@/lib/supabase";
 import { C, FONT_IMPORT } from "@/lib/theme";
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function slugify(str: string) {
   return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-// ── Typeahead ─────────────────────────────────────────────────────────────────
+// ── Labelled Typeahead ────────────────────────────────────────────────────────
 
 function Typeahead({ items, value, onChange, onClear, placeholder, onCreateClick, width }: any) {
   const [query, setQuery] = useState("");
@@ -68,7 +70,7 @@ function Typeahead({ items, value, onChange, onClear, placeholder, onCreateClick
   );
 }
 
-// ── Modals ────────────────────────────────────────────────────────────────────
+// ── Create modals ─────────────────────────────────────────────────────────────
 
 function CreatePersonModal({ initialName, role, roles, onSave, onClose, onCreateRole }: any) {
   const [name, setName] = useState(initialName || "");
@@ -281,17 +283,11 @@ type Look = {
   scene: string | null; gender: string | null;
   season_display: string | null; season_term: string | null; season_year: number | null;
   date_published: string | null; is_key_look: boolean; notes: string | null;
-  created_at: string;
-  is_collaboration: boolean;
-  event_id: string | null;
+  created_at: string; is_collaboration: boolean; event_id: string | null;
   collection_title: string | null; collection_description: string | null;
-  publication_id: string | null;
-  publication_issue_month: number | null;
+  publication_id: string | null; publication_issue_month: number | null;
   publication_issue_year: number | null;
-  brands_display: string;
-  brand_count: number;
-  credit_count: number;
-  tag_count: number;
+  brands_display: string; brand_count: number; credit_count: number; tag_count: number;
 };
 
 type Contributor = { key: string; role: any; person: any };
@@ -337,14 +333,20 @@ export default function ReviewQueue() {
   const [editNotes, setEditNotes] = useState("");
   const [editKeyLook, setEditKeyLook] = useState(false);
 
+  // Delete state
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const [personModal, setPersonModal] = useState<{name: string; role: string; target: string} | null>(null);
   const [brandModal, setBrandModal] = useState<{name: string; target: string} | null>(null);
   const [publicationModal, setPublicationModal] = useState<string | null>(null);
 
+  const [checkedContributors, setCheckedContributors] = useState<Set<string>>(new Set());
+  const [clipboardFlash, setClipboardFlash] = useState(false);
+
   useEffect(() => { loadEntities(); }, []);
   useEffect(() => { loadLooks(); }, [statusFilter]);
-
-  const cdRole = () => creditRoles.find(r => r.slug === "creative-director") || creditRoles[0];
 
   const loadEntities = async () => {
     try {
@@ -390,7 +392,7 @@ export default function ReviewQueue() {
   const loadDetail = async (lookId: string) => {
     const [bRows, credits] = await Promise.all([
       sb(`look_brand_credits?look_id=eq.${lookId}&select=id,brand_id,credit_order,is_courtesy,brands(id,name)&order=credit_order`),
-      sb(`look_credits?look_id=eq.${lookId}&select=id,role,person_id,credit_order,people(id,name,primary_role)&order=credit_order`),
+      sb(`look_credits?look_id=eq.${lookId}&select=id,role,person_id,credit_order,ingest_handle,people(id,name,primary_role)&order=credit_order`),
     ]);
     setBrandRows((bRows || [])
       .filter((r: any) => r.brands)
@@ -399,11 +401,13 @@ export default function ReviewQueue() {
     const roleByName = (name: string) => creditRoles.find(r => r.name === name) || { id: `adhoc-${name}`, name, slug: slugify(name), sort_order: 999 };
     setContributors((credits || [])
       .filter((c: any) => c.people)
-      .map((c: any, i: number) => ({ key: `c-${c.id}-${i}`, role: roleByName(c.role), person: c.people })));
+      .map((c: any, i: number) => ({ key: `c-${c.id}-${i}`, role: roleByName(c.role), person: c.people, ingest_handle: c.ingest_handle })));
   };
 
   const selectLook = (look: Look) => {
     setSelected(look);
+    setConfirmDelete(false);
+    setDeleteError(null);
     setEditScene(look.scene || "");
     setEditGender(look.gender || "");
     setEditSeasonTerm(look.season_term || "");
@@ -425,26 +429,51 @@ export default function ReviewQueue() {
     clearChecked();
   };
 
+  // ── Delete ────────────────────────────────────────────────────────────────
+
+  const deleteLook = async () => {
+    if (!selected) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(
+        `https://rsslbgfbdoqxgogbuuzc.supabase.co/functions/v1/delete-look`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ look_id: selected.id }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Delete failed");
+      }
+      // Remove from list and close detail panel
+      setLooks(prev => prev.filter(l => l.id !== selected.id));
+      setCounts(prev => ({
+        ...prev,
+        [selected.status]: Math.max(0, (prev[selected.status] || 1) - 1),
+      }));
+      setSelected(null);
+    } catch (e: any) {
+      setDeleteError(e.message || "Delete failed");
+    }
+    setDeleting(false);
+    setConfirmDelete(false);
+  };
+
+  // ── Brands & contributors ─────────────────────────────────────────────────
+
   function addBrandRow() { setBrandRows(prev => [...prev, { key: `b-new-${Date.now()}-${prev.length}`, brand: null, isCourtesy: false }]); }
   function updateBrandRow(key: string, brand: any) { setBrandRows(prev => prev.map(b => b.key === key ? { ...b, brand } : b)); }
   function toggleBrandCourtesy(key: string) { setBrandRows(prev => prev.map(b => b.key === key ? { ...b, isCourtesy: !b.isCourtesy } : b)); }
   function removeBrandRow(key: string) { setBrandRows(prev => prev.filter(b => b.key !== key)); }
-
-  function addContributor() {
-    setContributors(prev => [...prev, { key: `c-new-${Date.now()}-${prev.length}`, role: null, person: null }]);
-  }
-
-  const [checkedContributors, setCheckedContributors] = useState<Set<string>>(new Set());
-  const [clipboardFlash, setClipboardFlash] = useState(false);
+  function addContributor() { setContributors(prev => [...prev, { key: `c-new-${Date.now()}-${prev.length}`, role: null, person: null, ingest_handle: null } as any]); }
 
   const clearChecked = () => setCheckedContributors(new Set());
 
   function toggleContributorCheck(key: string) {
-    setCheckedContributors(prev => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
+    setCheckedContributors(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
   }
 
   function copyContributors() {
@@ -474,9 +503,7 @@ export default function ReviewQueue() {
       let role = c.role;
       if (!role && person?.primary_role) {
         const pr = person.primary_role;
-        const match = creditRoles.find((r: any) =>
-          r.name === pr || r.slug === pr.replace(/_/g, "-")
-        );
+        const match = creditRoles.find((r: any) => r.name === pr || r.slug === pr.replace(/_/g, "-"));
         if (match) role = match;
       }
       return { ...c, person, role };
@@ -515,7 +542,6 @@ export default function ReviewQueue() {
     setSaving(true);
     try {
       const validBrandRows = brandRows.filter(b => b.brand?.id);
-
       await sb(`looks?id=eq.${selected.id}`, {
         method: "PATCH", prefer: "",
         body: JSON.stringify({
@@ -538,15 +564,10 @@ export default function ReviewQueue() {
           is_key_look: editKeyLook,
         }),
       });
-
       await sb(`look_brand_credits?look_id=eq.${selected.id}`, { method: "DELETE", prefer: "" });
-      const newBrandCredits = validBrandRows.map((b, i) => ({
-        look_id: selected.id, brand_id: b.brand.id, role: null, credit_order: i, is_courtesy: b.isCourtesy,
-      }));
-      if (newBrandCredits.length > 0) {
-        await sb("look_brand_credits", { method: "POST", body: JSON.stringify(newBrandCredits) });
+      if (validBrandRows.length > 0) {
+        await sb("look_brand_credits", { method: "POST", body: JSON.stringify(validBrandRows.map((b, i) => ({ look_id: selected.id, brand_id: b.brand.id, role: null, credit_order: i, is_courtesy: b.isCourtesy }))) });
       }
-
       await sb(`look_credits?look_id=eq.${selected.id}`, { method: "DELETE", prefer: "" });
       const newCredits = contributors
         .filter(c => c.person?.id && c.role)
@@ -554,7 +575,6 @@ export default function ReviewQueue() {
       if (newCredits.length > 0) {
         await sb("look_credits", { method: "POST", body: JSON.stringify(newCredits) });
       }
-
       await loadLooks();
     } catch(e) { console.error(e); }
     setSaving(false);
@@ -753,15 +773,12 @@ export default function ReviewQueue() {
                   <F label="Contributors" span2>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <button
-                          onClick={copyContributors}
-                          disabled={checkedContributors.size === 0}
+                        <button onClick={copyContributors} disabled={checkedContributors.size === 0}
                           style={{ background: clipboardFlash ? C.green : C.lift2, border: "none", color: clipboardFlash ? "#fff" : C.muted, padding: "5px 12px", fontSize: 12, cursor: checkedContributors.size === 0 ? "default" : "pointer", borderRadius: 16, fontFamily: "Inter,sans-serif", transition: "all 0.2s", opacity: checkedContributors.size === 0 ? 0.35 : 1 }}>
                           {clipboardFlash ? "Copied ✓" : `Copy${checkedContributors.size > 0 ? ` (${checkedContributors.size})` : ""}`}
                         </button>
                         {checkedContributors.size > 0 && (
-                          <button
-                            onClick={() => { setContributors(prev => prev.filter(c => !checkedContributors.has(c.key))); clearChecked(); }}
+                          <button onClick={() => { setContributors(prev => prev.filter(c => !checkedContributors.has(c.key))); clearChecked(); }}
                             style={{ background: "none", border: `1px solid ${C.red}`, color: C.red, padding: "5px 12px", fontSize: 12, cursor: "pointer", borderRadius: 16, fontFamily: "Inter,sans-serif" }}>
                             Delete ({checkedContributors.size})
                           </button>
@@ -779,11 +796,17 @@ export default function ReviewQueue() {
                           </button>
                         )}
                       </div>
-                      {contributors.map(c => (
+                      {contributors.map((c: any) => (
                         <div key={c.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           <input type="checkbox" checked={checkedContributors.has(c.key)} onChange={() => toggleContributorCheck(c.key)}
                             style={{ accentColor: C.white, width: 14, height: 14, cursor: "pointer", flexShrink: 0 }} />
                           <Typeahead items={people} value={c.person} onChange={(p: any) => updateContributorPerson(c.key, p)} onClear={() => updateContributorPerson(c.key, null)} placeholder="Search or create person..." onCreateClick={(name: string) => setPersonModal({ name, role: c.role?.slug ? c.role.slug.replace(/-/g, "_") : null, target: `contributor:${c.key}` })} />
+                          {/* ingest_handle provenance tag */}
+                          {c.ingest_handle && (
+                            <span style={{ fontSize: 11, color: C.muted, background: C.lift2, padding: "3px 8px", borderRadius: 10, whiteSpace: "nowrap", flexShrink: 0 }}>
+                              @{c.ingest_handle}
+                            </span>
+                          )}
                           <Typeahead width={160} items={creditRoles} value={c.role} onChange={(r: any) => updateContributorRole(c.key, r)} onClear={() => updateContributorRole(c.key, null)} placeholder="Role..." onCreateClick={(name: string) => createRole(name, c.key)} />
                         </div>
                       ))}
@@ -904,7 +927,8 @@ export default function ReviewQueue() {
                   </div>
                 )}
 
-                <div style={{ display: "flex", gap: 10, paddingBottom: 20 }}>
+                {/* Actions row */}
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", paddingBottom: 8 }}>
                   <button onClick={saveEdits} disabled={saving}
                     style={{ background: C.white, border: "none", color: "#212121", padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>
                     {saving ? "Saving…" : "Save changes"}
@@ -922,6 +946,39 @@ export default function ReviewQueue() {
                       style={{ background: C.lift2, border: "none", color: C.text, padding: "9px 20px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif", opacity: saving ? 0.5 : 1 }}>Restore</button>
                   )}
                 </div>
+
+                {/* Delete section */}
+                <div style={{ borderTop: `1px solid ${C.lift1}`, paddingTop: 14, paddingBottom: 20 }}>
+                  {!confirmDelete ? (
+                    <button onClick={() => { setConfirmDelete(true); setDeleteError(null); }}
+                      style={{ background: "none", border: "none", color: C.dim, fontSize: 12, cursor: "pointer", fontFamily: "Inter,sans-serif", padding: "6px 0" }}>
+                      Delete look permanently
+                    </button>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div style={{ fontSize: 13, color: C.text }}>
+                        This removes the Supabase record, all credits and tags, and the Cloudinary image.
+                        <span style={{ color: C.red }}> Cannot be undone.</span>
+                      </div>
+                      {deleteError && (
+                        <div style={{ fontSize: 12, color: C.red, background: "rgba(224,90,78,0.1)", border: `1px solid ${C.red}`, borderRadius: 8, padding: "8px 12px" }}>
+                          {deleteError}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <button onClick={deleteLook} disabled={deleting}
+                          style={{ background: C.red, border: "none", color: "#fff", padding: "8px 18px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontWeight: 600, fontFamily: "Inter,sans-serif", opacity: deleting ? 0.5 : 1 }}>
+                          {deleting ? "Deleting…" : "Delete permanently"}
+                        </button>
+                        <button tabIndex={-1} onClick={() => { setConfirmDelete(false); setDeleteError(null); }}
+                          style={{ background: "none", border: "none", color: C.muted, fontSize: 13, cursor: "pointer", fontFamily: "Inter,sans-serif" }}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
               </div>
             </div>
           )}
