@@ -305,6 +305,9 @@ export default function ReviewQueue() {
   const [saving, setSaving] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
+  const [sceneFilter, setSceneFilter] = useState("");
+  const [pubFilter, setPubFilter] = useState("");
+  const [eventFilter, setEventFilter] = useState("");
 
   const [brands, setBrands] = useState<any[]>([]);
   const [people, setPeople] = useState<any[]>([]);
@@ -606,9 +609,21 @@ export default function ReviewQueue() {
   const inp = { background: C.lift3, border: "none" as const, color: C.text, padding: "8px 12px", fontSize: 13, borderRadius: 10, outline: "none", width: "100%", boxSizing: "border-box" as const, fontFamily: "Inter,sans-serif" };
   const sel = { ...inp, cursor: "pointer" as const };
 
-  const filteredLooks = search.trim()
-    ? looks.filter(l => l.brands_display.toLowerCase().includes(search.toLowerCase()) || (l.source_name || "").toLowerCase().includes(search.toLowerCase()))
-    : looks;
+  const filteredLooks = looks.filter(l => {
+    if (search.trim()) {
+      const s = search.toLowerCase();
+      const matchesBrand = l.brands_display.toLowerCase().includes(s);
+      const matchesSource = (l.source_name || "").toLowerCase().includes(s);
+      if (!matchesBrand && !matchesSource) return false;
+    }
+    if (sceneFilter && l.scene !== sceneFilter) return false;
+    if (pubFilter && l.publication_id !== pubFilter) return false;
+    if (eventFilter && l.event_id !== eventFilter) return false;
+    return true;
+  });
+
+  const hasActiveFilters = search.trim() || sceneFilter || pubFilter || eventFilter;
+  const clearFilters = () => { setSearch(""); setSceneFilter(""); setPubFilter(""); setEventFilter(""); };
 
   return (
     <>
@@ -636,8 +651,36 @@ export default function ReviewQueue() {
               </button>
             ))}
           </div>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by brand or account..."
-            style={{ background: C.lift2, border: "none", color: C.text, padding: "7px 14px", fontSize: 13, borderRadius: 20, outline: "none", width: 240, fontFamily: "Inter,sans-serif" }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Brand or account…"
+            style={{ background: C.lift2, border: "none", color: C.text, padding: "7px 14px", fontSize: 13, borderRadius: 20, outline: "none", width: 180, fontFamily: "Inter,sans-serif" }} />
+          <select value={sceneFilter} onChange={e => setSceneFilter(e.target.value)}
+            style={{ background: sceneFilter ? C.lift3 : C.lift2, border: "none", color: sceneFilter ? C.text : C.muted, padding: "7px 14px", fontSize: 13, borderRadius: 20, outline: "none", cursor: "pointer", fontFamily: "Inter,sans-serif" }}>
+            <option value="">Scene</option>
+            <option value="runway">Runway</option>
+            <option value="backstage">Backstage</option>
+            <option value="street">Street</option>
+            <option value="editorial">Editorial</option>
+            <option value="designer_showcase">Designer Showcase</option>
+            <option value="lookbook">Lookbook</option>
+            <option value="presentation">Presentation</option>
+            <option value="other">Other</option>
+          </select>
+          <select value={pubFilter} onChange={e => setPubFilter(e.target.value)}
+            style={{ background: pubFilter ? C.lift3 : C.lift2, border: "none", color: pubFilter ? C.text : C.muted, padding: "7px 14px", fontSize: 13, borderRadius: 20, outline: "none", cursor: "pointer", fontFamily: "Inter,sans-serif", maxWidth: 160 }}>
+            <option value="">Publication</option>
+            {pubList.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select value={eventFilter} onChange={e => setEventFilter(e.target.value)}
+            style={{ background: eventFilter ? C.lift3 : C.lift2, border: "none", color: eventFilter ? C.text : C.muted, padding: "7px 14px", fontSize: 13, borderRadius: 20, outline: "none", cursor: "pointer", fontFamily: "Inter,sans-serif", maxWidth: 180 }}>
+            <option value="">Event</option>
+            {events.map((e: any) => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
+          {hasActiveFilters && (
+            <button onClick={clearFilters}
+              style={{ background: "none", border: "none", color: C.muted, fontSize: 12, cursor: "pointer", fontFamily: "Inter,sans-serif", padding: "0 4px", whiteSpace: "nowrap" }}>
+              Clear ×
+            </button>
+          )}
           <div style={{ flex: 1 }} />
         </div>
 
@@ -658,7 +701,7 @@ export default function ReviewQueue() {
             ) : filteredLooks.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 300, gap: 8, color: C.muted }}>
                 <div style={{ fontSize: 32 }}>✓</div>
-                <div>No {statusFilter === "all" ? "" : statusFilter} looks{search ? ` matching "${search}"` : ""}</div>
+                <div>No {statusFilter === "all" ? "" : statusFilter} looks{hasActiveFilters ? " matching current filters" : ""}</div>
               </div>
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
