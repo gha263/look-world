@@ -834,9 +834,9 @@ export default function ReviewQueue() {
                 {selected.source_url && (
                   <a href={selected.source_url} target="_blank" rel="noreferrer"
                     style={{ position: "absolute", top: 10, left: 10, fontSize: 12, color: C.text, textDecoration: "none", background: "rgba(0,0,0,0.7)", padding: "5px 10px", borderRadius: 12, fontWeight: 500, fontFamily: "Inter,sans-serif" }}>↗ source</a>
-                  <a href={`/?look=${selected.id}&status=${selected.status}`}
-                    style={{ position: "absolute", top: 10, left: selected.source_url ? 90 : 10, fontSize: 12, color: C.muted, textDecoration: "none", background: "rgba(0,0,0,0.7)", padding: "5px 10px", borderRadius: 12, fontFamily: "Inter,sans-serif" }}>✦ Tags</a>
                 )}
+                <a href={`/?look=${selected.id}&status=${selected.status}`}
+                  style={{ position: "absolute", top: 10, left: selected.source_url ? 90 : 10, fontSize: 12, color: C.muted, textDecoration: "none", background: "rgba(0,0,0,0.7)", padding: "5px 10px", borderRadius: 12, fontFamily: "Inter,sans-serif" }}>✦ Tags</a>
               </div>
 
               <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
