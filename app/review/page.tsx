@@ -343,7 +343,13 @@ export default function ReviewQueue() {
   const [looks, setLooks] = useState<Look[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"all"|"draft"|"published"|"archived">("draft");
+  const [statusFilter, setStatusFilter] = useState<"all"|"draft"|"published"|"archived">(() => {
+    if (typeof window !== "undefined") {
+      const s = new URLSearchParams(window.location.search).get("status");
+      if (s && ["draft","published","archived","all"].includes(s)) return s as any;
+    }
+    return "draft";
+  });
   const [selected, setSelected] = useState<Look | null>(null);
   const [saving, setSaving] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -391,26 +397,19 @@ export default function ReviewQueue() {
 
   const [checkedContributors, setCheckedContributors] = useState<Set<string>>(new Set());
   const [clipboardFlash, setClipboardFlash] = useState(false);
-  const pendingLookId = useRef<string | null>(null);
+  const pendingLookId = useRef<string | null>(
+    typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("look") : null
+  );
 
   useEffect(() => { loadEntities(); }, []);
   useEffect(() => { loadLooks(); }, [statusFilter]);
 
-  // Read ?look= URL param and open that look once loaded
+  // Open look from URL param once the list is loaded
   useEffect(() => {
-    if (loading || looks.length === 0) return;
-    if (pendingLookId.current) {
-      const look = looks.find(l => l.id === pendingLookId.current);
-      if (look) { selectLook(look); pendingLookId.current = null; }
-    }
+    if (loading || !pendingLookId.current || looks.length === 0) return;
+    const look = looks.find(l => l.id === pendingLookId.current);
+    if (look) { selectLook(look); pendingLookId.current = null; }
   }, [loading, looks]); // eslint-disable-line
-
-  // On first mount, capture URL param (before looks are loaded)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const lookId = params.get("look");
-    if (lookId) pendingLookId.current = lookId;
-  }, []);
 
   const loadEntities = async () => {
     try {
