@@ -716,6 +716,7 @@ export default function IntakePage() {
                 <select style={s.select} value={scene} onChange={e => setScene(e.target.value)}>
                   <option value="">— select —</option>
                   <option value="runway">Runway</option>
+                  <option value="backstage">Backstage</option>
                   <option value="street">Street</option>
                   <option value="editorial">Editorial</option>
                   <option value="designer_showcase">Designer Showcase</option>
