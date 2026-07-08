@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { sb, fetchLookIdsForTag } from "@/lib/supabase";
 import { C, FONT_IMPORT } from "@/lib/theme";
 
@@ -28,6 +28,7 @@ export default function TagStudio() {
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState(false);
   const [loading, setLoading] = useState(true);
+  const pendingLookId = useRef<string | null>(null);
   const [brandFilter, setBrandFilter] = useState(() => { try { return localStorage.getItem("ts_brand") || "all"; } catch { return "all"; } });
   const [statusFilter, setStatusFilter] = useState<string>(() => { try { return localStorage.getItem("ts_status") || "published"; } catch { return "published"; } });
   const [untaggedOnly, setUntaggedOnly] = useState(false);
@@ -71,6 +72,27 @@ export default function TagStudio() {
     setFiltered(f);
     setIdx(i => Math.min(i, Math.max(0, f.length - 1)));
   }, [brandFilter, statusFilter, untaggedOnly, sortMode, tagFilterLookIds, looks, taggedLookIds]);
+
+  // Read ?look= URL param once loading completes, set status filter if needed
+  useEffect(() => {
+    if (loading) return;
+    const params = new URLSearchParams(window.location.search);
+    const lookId = params.get("look");
+    const lookStatus = params.get("status");
+    if (!lookId) return;
+    pendingLookId.current = lookId;
+    if (lookStatus && lookStatus !== statusFilter) setStatusFilter(lookStatus);
+  }, [loading]); // eslint-disable-line
+
+  // Once filtered list updates, jump to pending look
+  useEffect(() => {
+    if (!pendingLookId.current) return;
+    const i = filtered.findIndex(l => l.id === pendingLookId.current);
+    if (i >= 0) {
+      setIdx(i);
+      pendingLookId.current = null;
+    }
+  }, [filtered]);
 
   useEffect(() => { try { localStorage.setItem("ts_idx", String(idx)); } catch {} }, [idx]);
   useEffect(() => { try { localStorage.setItem("ts_brand", brandFilter); } catch {} }, [brandFilter]);
@@ -644,6 +666,10 @@ export default function TagStudio() {
                             ↗ source
                           </a>
                         )}
+                        <a href={`/review?look=${look.id}`}
+                          style={{fontSize:12,color:C.muted,textDecoration:"none",background:C.lift2,padding:"5px 12px",borderRadius:20,fontWeight:500}}>
+                          → Review
+                        </a>
                         <span style={{fontSize:13,color:C.muted,fontWeight:500}}>
                           <span style={{color:C.text,fontWeight:600}}>{activeTags.size}</span> tags
                           {aiApprovedTagIds.size > 0 && humanTagIds.size < activeTags.size && (
