@@ -64,7 +64,7 @@ export default function TagStudio() {
   useEffect(() => {
     let f = looks;
     if (statusFilter !== "all") f = f.filter(l => l.status === statusFilter);
-    if (brandFilter !== "all") f = f.filter(l => l.brand_id === brandFilter);
+    if (brandFilter !== "all") f = f.filter(l => l.primaryBrandId === brandFilter);
     if (tagFilterLookIds !== null) f = f.filter(l => tagFilterLookIds.has(l.id));
     if (untaggedOnly) f = f.filter(l => !taggedLookIds.has(l.id));
     if (sortMode === "newest") f = [...f].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
@@ -192,16 +192,19 @@ export default function TagStudio() {
     setLoading(true);
     try {
       const [l, b, t, humanTagged, aiTagged] = await Promise.all([
-        sb("looks?select=id,cloudinary_url,caption,brand_id,season_display,source_url,notes,status,created_at,image_mode&order=brand_id,created_at&limit=2000"),
+        sb("looks?select=id,cloudinary_url,caption,season_display,source_url,notes,status,created_at,image_mode,look_brand_credits(brand_id,credit_order,brands(id,name))&order=created_at.desc&limit=2000"),
         sb("brands?select=id,name&order=name"),
         sb("tags?select=*&order=tag_type,name"),
         // Two separate queries to avoid row limit issues on large tables
         sb("entity_tags?entity_type=eq.look&source=eq.human&select=entity_id&limit=10000"),
         sb("entity_tags?entity_type=eq.look&source=eq.ai&status=eq.approved&select=entity_id&limit=10000"),
       ]);
-      const brandMap: Record<string,string> = {};
-      b.forEach((br: any) => { brandMap[br.id] = br.name; });
-      const looksWithBrand = l.map((look: any) => ({ ...look, brands: { name: brandMap[look.brand_id] || "" } }));
+      // Build brand name from primary look_brand_credits entry (lowest credit_order)
+      const looksWithBrand = l.map((look: any) => {
+        const credits = (look.look_brand_credits || []).slice().sort((a: any, b: any) => (a.credit_order ?? 0) - (b.credit_order ?? 0));
+        const primaryBrand = credits[0]?.brands || null;
+        return { ...look, primaryBrandId: primaryBrand?.id || null, brands: { name: primaryBrand?.name || "" } };
+      });
       const usable = t.filter((t: any) => !EXCLUDED.includes(t.tag_type));
       const grouped = usable.reduce((acc: Record<string,any[]>, tag: any) => {
         if (!acc[tag.tag_type]) acc[tag.tag_type] = [];
