@@ -199,20 +199,77 @@ function F({ label, children }: any) {
 
 // ── Create modals ─────────────────────────────────────────────────────────────
 
-function CreateBrandModal({ initialName, locations, onSave, onClose }: any) {
+function CreateBrandModal({ initialName, locations, people, onSave, onPersonCreated, onClose }: any) {
   const [name, setName] = useState(initialName || "");
   const [ig, setIg] = useState("");
   const [website, setWebsite] = useState("");
   const [country, setCountry] = useState<any>(null);
   const [city, setCity] = useState<any>(null);
+  const [cdPerson, setCdPerson] = useState<any>(null); // existing person or {isNew: true, name}
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    try {
+      // 1. Create brand
+      const brandRes = await fetch(`${SUPABASE_URL}/rest/v1/brands`, {
+        method: "POST",
+        headers: { ...H, Prefer: "return=representation" },
+        body: JSON.stringify({ name: name.trim(), slug: slugify(name), instagram_handle: ig || null, website: website || null, country_id: country?.id || null, city_id: city?.id || null }),
+      });
+      if (!brandRes.ok) throw new Error(await brandRes.text());
+      const [createdBrand] = await brandRes.json();
+
+      // 2. Handle creative director
+      let cdPersonId = cdPerson?.isNew ? null : cdPerson?.id;
+      if (cdPerson?.isNew && cdPerson.name) {
+        const personRes = await fetch(`${SUPABASE_URL}/rest/v1/people`, {
+          method: "POST",
+          headers: { ...H, Prefer: "return=representation" },
+          body: JSON.stringify({ name: cdPerson.name.trim(), slug: slugify(cdPerson.name), primary_role: "creative_director" }),
+        });
+        if (!personRes.ok) throw new Error(await personRes.text());
+        const [createdPerson] = await personRes.json();
+        cdPersonId = createdPerson.id;
+        if (onPersonCreated) onPersonCreated(createdPerson);
+      }
+      if (cdPersonId && createdBrand.id) {
+        await fetch(`${SUPABASE_URL}/rest/v1/brand_directors`, {
+          method: "POST",
+          headers: { ...H, Prefer: "return=minimal" },
+          body: JSON.stringify({ brand_id: createdBrand.id, person_id: cdPersonId, is_current: true }),
+        });
+      }
+
+      onSave(createdBrand);
+    } catch (e: any) { alert(e.message); }
+    setSaving(false);
+  };
+
   return (
-    <Modal title="New Brand" onClose={onClose} saveDisabled={!name.trim()}
-      onSave={() => onSave({ name: name.trim(), instagram_handle: ig || null, website: website || null, country_id: country?.id || null, city_id: city?.id || null, slug: slugify(name) })}>
+    <Modal title="New Brand" onClose={onClose} saveDisabled={!name.trim() || saving} onSave={handleSave}>
       <F label="Name *"><input style={s.input} value={name} onChange={e => setName(e.target.value)} autoFocus /></F>
       <F label="Instagram Handle"><input style={s.input} value={ig} onChange={e => setIg(e.target.value)} placeholder="@handle" /></F>
       <F label="Website"><input style={s.input} value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." /></F>
       <Typeahead label="Country" items={locations.filter((l: any) => l.location_type === "country")} value={country} onChange={setCountry} onClear={() => setCountry(null)} />
       <Typeahead label="City" items={locations.filter((l: any) => l.location_type === "city")} value={city} onChange={setCity} onClear={() => setCity(null)} />
+      <Typeahead
+        label="Creative Director"
+        items={people || []}
+        value={cdPerson?.isNew ? null : cdPerson}
+        onChange={setCdPerson}
+        onClear={() => setCdPerson(null)}
+        placeholder="Search or create..."
+        onCreateClick={(n: string) => setCdPerson({ isNew: true, name: n, id: null })}
+      />
+      {cdPerson?.isNew && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: s.input.backgroundColor, borderRadius: 12, fontSize: 13 }}>
+          <span style={{ color: "#ececec", flex: 1 }}>{cdPerson.name}</span>
+          <span style={{ color: "#8e8ea0", fontSize: 11 }}>new person</span>
+          <button onClick={() => setCdPerson(null)} tabIndex={-1} style={{ background: "none", border: "none", color: "#8e8ea0", fontSize: 18, cursor: "pointer", padding: 0, lineHeight: 1 }}>×</button>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -774,7 +831,7 @@ export default function IntakePage() {
           </div>
         </div>
 
-        {modal?.type === "brand" && <CreateBrandModal initialName={modal.name} locations={locations} onSave={handleCreateBrand} onClose={() => setModal(null)} />}
+        {modal?.type === "brand" && <CreateBrandModal initialName={modal.name} locations={locations} people={people} onSave={handleCreateBrand} onPersonCreated={(p: any) => setPeople(prev => [...prev, p].sort((a: any, b: any) => a.name.localeCompare(b.name)))} onClose={() => setModal(null)} />}
         {modal?.type === "person" && <CreatePersonModal initialName={modal.name} role={modal.role} roles={creditRoles} onSave={handleCreatePerson} onClose={() => setModal(null)} onCreateRole={createRoleForModal} />}
         {modal?.type === "event" && <CreateEventModal initialName={modal.name} locations={locations} onSave={handleCreateEvent} onClose={() => setModal(null)} />}
         {modal?.type === "publication" && <CreatePublicationModal initialName={modal.name} locations={locations} onSave={handleCreatePublication} onClose={() => setModal(null)} />}
