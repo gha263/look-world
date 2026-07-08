@@ -42,6 +42,8 @@ export default function TagStudio() {
   const [notes, setNotes] = useState("");
   const [editingNotes, setEditingNotes] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
+  const [imageMode, setImageMode] = useState<string | null>(null);
+  const [savingImageMode, setSavingImageMode] = useState(false);
 
   // ── Tag filter (toolbar dropdown) ────────────────────────────────────────────
   const [tagFilterId, setTagFilterId] = useState("all");
@@ -62,22 +64,10 @@ export default function TagStudio() {
   useEffect(() => {
     let f = looks;
     if (statusFilter !== "all") f = f.filter(l => l.status === statusFilter);
-    // brandFilter checks brand_id derived from look_brand_credits (lowest credit_order brand)
     if (brandFilter !== "all") f = f.filter(l => l.brand_id === brandFilter);
     if (tagFilterLookIds !== null) f = f.filter(l => tagFilterLookIds.has(l.id));
     if (untaggedOnly) f = f.filter(l => !taggedLookIds.has(l.id));
-    if (sortMode === "newest") {
-      f = [...f].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
-    } else {
-      // "by brand" sort — client-side since SQL no longer orders by brand_id
-      f = [...f].sort((a, b) => {
-        const an = a.brands?.name || "";
-        const bn = b.brands?.name || "";
-        if (an && !bn) return -1;
-        if (!an && bn) return 1;
-        return an.localeCompare(bn);
-      });
-    }
+    if (sortMode === "newest") f = [...f].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
     setFiltered(f);
     setIdx(i => Math.min(i, Math.max(0, f.length - 1)));
   }, [brandFilter, statusFilter, untaggedOnly, sortMode, tagFilterLookIds, looks, taggedLookIds]);
@@ -92,6 +82,7 @@ export default function TagStudio() {
       loadTags(filtered[idx].id);
       setNotes(filtered[idx].notes || "");
       setEditingNotes(false);
+      setImageMode(filtered[idx].image_mode || null);
     }
   }, [idx, filtered]);
 
@@ -201,30 +192,16 @@ export default function TagStudio() {
     setLoading(true);
     try {
       const [l, b, t, humanTagged, aiTagged] = await Promise.all([
-        // looks.brand_id was dropped (Option A reset). Brands now come via look_brand_credits.
-        // We embed the brand credits and derive brand_id + brands.name client-side so the
-        // existing brandFilter logic (l.brand_id === brandFilter) keeps working unchanged.
-        sb("looks?select=id,cloudinary_url,caption,season_display,source_url,notes,status,created_at,look_brand_credits(brand_id,credit_order,brands(name))&order=created_at.desc&limit=2000"),
+        sb("looks?select=id,cloudinary_url,caption,brand_id,season_display,source_url,notes,status,created_at,image_mode&order=brand_id,created_at&limit=2000"),
         sb("brands?select=id,name&order=name"),
         sb("tags?select=*&order=tag_type,name"),
         // Two separate queries to avoid row limit issues on large tables
         sb("entity_tags?entity_type=eq.look&source=eq.human&select=entity_id&limit=10000"),
         sb("entity_tags?entity_type=eq.look&source=eq.ai&status=eq.approved&select=entity_id&limit=10000"),
       ]);
-
-      // Derive brand_id and brands.name from the look_brand_credits embed.
-      // Primary brand = brand with lowest credit_order (matches look_enriched MV convention).
-      // brand_id is set on each look object so the existing brandFilter works without changes.
-      const looksWithBrand = l.map((look: any) => {
-        const lbc = (look.look_brand_credits || [])
-          .slice()
-          .sort((a: any, b: any) => (a.credit_order ?? 0) - (b.credit_order ?? 0));
-        const primaryBrandId = lbc[0]?.brand_id || null;
-        const primaryBrandName = lbc[0]?.brands?.name || "";
-        const { look_brand_credits, ...rest } = look;
-        return { ...rest, brand_id: primaryBrandId, brands: { name: primaryBrandName } };
-      });
-
+      const brandMap: Record<string,string> = {};
+      b.forEach((br: any) => { brandMap[br.id] = br.name; });
+      const looksWithBrand = l.map((look: any) => ({ ...look, brands: { name: brandMap[look.brand_id] || "" } }));
       const usable = t.filter((t: any) => !EXCLUDED.includes(t.tag_type));
       const grouped = usable.reduce((acc: Record<string,any[]>, tag: any) => {
         if (!acc[tag.tag_type]) acc[tag.tag_type] = [];
@@ -378,6 +355,20 @@ export default function TagStudio() {
       setEditingNotes(false);
     } catch(e) { console.error(e); }
     setSavingNotes(false);
+  };
+
+  const saveImageMode = async (mode: string | null) => {
+    const look = filtered[idx];
+    if (!look) return;
+    const newMode = look.image_mode === mode ? null : mode; // toggle off if already set
+    setSavingImageMode(true);
+    try {
+      await sb(`looks?id=eq.${look.id}`, { method: "PATCH", body: JSON.stringify({ image_mode: newMode }), prefer: "" });
+      setImageMode(newMode);
+      setFiltered(prev => prev.map(l => l.id === look.id ? { ...l, image_mode: newMode } : l));
+      setLooks(prev => prev.map(l => l.id === look.id ? { ...l, image_mode: newMode } : l));
+    } catch(e) { console.error(e); }
+    setSavingImageMode(false);
   };
 
   const addTag = async () => {
@@ -623,6 +614,27 @@ export default function TagStudio() {
                         )}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        {/* Image mode toggle */}
+                        <div style={{display:"flex",background:C.lift2,borderRadius:20,padding:2,gap:2,opacity:savingImageMode?0.5:1}}>
+                          {[
+                            { value: "color", label: "Color" },
+                            { value: "black_and_white", label: "B&W" },
+                          ].map(({ value, label }) => (
+                            <button key={value} onClick={() => saveImageMode(value)}
+                              style={{
+                                background: imageMode === value ? C.white : "transparent",
+                                border: "none",
+                                color: imageMode === value ? "#212121" : C.muted,
+                                padding: "4px 10px", fontSize: 12,
+                                cursor: "pointer", borderRadius: 18,
+                                fontFamily: "Inter,sans-serif",
+                                fontWeight: imageMode === value ? 600 : 400,
+                                transition: "all 0.15s",
+                              }}>
+                              {label}
+                            </button>
+                          ))}
+                        </div>
                         {look.source_url && (
                           <a href={look.source_url} target="_blank" rel="noreferrer"
                             style={{fontSize:12,color:C.text,textDecoration:"none",background:C.lift2,padding:"5px 12px",borderRadius:20,fontWeight:500}}>
