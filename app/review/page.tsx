@@ -391,9 +391,26 @@ export default function ReviewQueue() {
 
   const [checkedContributors, setCheckedContributors] = useState<Set<string>>(new Set());
   const [clipboardFlash, setClipboardFlash] = useState(false);
+  const pendingLookId = useRef<string | null>(null);
 
   useEffect(() => { loadEntities(); }, []);
   useEffect(() => { loadLooks(); }, [statusFilter]);
+
+  // Read ?look= URL param and open that look once loaded
+  useEffect(() => {
+    if (loading || looks.length === 0) return;
+    if (pendingLookId.current) {
+      const look = looks.find(l => l.id === pendingLookId.current);
+      if (look) { selectLook(look); pendingLookId.current = null; }
+    }
+  }, [loading, looks]); // eslint-disable-line
+
+  // On first mount, capture URL param (before looks are loaded)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const lookId = params.get("look");
+    if (lookId) pendingLookId.current = lookId;
+  }, []);
 
   const loadEntities = async () => {
     try {
@@ -780,6 +797,10 @@ export default function ReviewQueue() {
                         </td>
                         <td style={{ padding: "6px 10px" }} onClick={e => e.stopPropagation()}>
                           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <a href={`/?look=${look.id}&status=${look.status}`}
+                              style={{ fontSize: 11, color: C.muted, textDecoration: "none", background: C.lift2, padding: "4px 10px", borderRadius: 12, fontFamily: "Inter,sans-serif", whiteSpace: "nowrap" }}>
+                              ✦ Tags
+                            </a>
                             {look.status==="draft" && <button onClick={() => setStatus(look.id,"published")} style={{ background: C.green, border: "none", color: "#fff", padding: "4px 10px", fontSize: 11, cursor: "pointer", borderRadius: 12, fontWeight: 600, fontFamily: "Inter,sans-serif" }}>Publish</button>}
                             {look.status==="published" && <button onClick={() => setStatus(look.id,"archived","manual")} style={{ background: "transparent", border: `1px solid ${C.lift2}`, color: C.muted, padding: "4px 10px", fontSize: 11, cursor: "pointer", borderRadius: 12, fontFamily: "Inter,sans-serif" }}>Archive</button>}
                             {look.status==="archived" && <button onClick={() => setStatus(look.id,"published")} style={{ background: "transparent", border: `1px solid ${C.lift2}`, color: C.muted, padding: "4px 10px", fontSize: 11, cursor: "pointer", borderRadius: 12, fontFamily: "Inter,sans-serif" }}>Restore</button>}
@@ -813,6 +834,8 @@ export default function ReviewQueue() {
                 {selected.source_url && (
                   <a href={selected.source_url} target="_blank" rel="noreferrer"
                     style={{ position: "absolute", top: 10, left: 10, fontSize: 12, color: C.text, textDecoration: "none", background: "rgba(0,0,0,0.7)", padding: "5px 10px", borderRadius: 12, fontWeight: 500, fontFamily: "Inter,sans-serif" }}>↗ source</a>
+                  <a href={`/?look=${selected.id}&status=${selected.status}`}
+                    style={{ position: "absolute", top: 10, left: selected.source_url ? 90 : 10, fontSize: 12, color: C.muted, textDecoration: "none", background: "rgba(0,0,0,0.7)", padding: "5px 10px", borderRadius: 12, fontFamily: "Inter,sans-serif" }}>✦ Tags</a>
                 )}
               </div>
 
