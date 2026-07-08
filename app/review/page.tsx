@@ -147,26 +147,50 @@ function CreatePersonModal({ initialName, role, roles, onSave, onClose, onCreate
   );
 }
 
-function CreateBrandModal({ initialName, locations, onSave, onClose }: any) {
+function CreateBrandModal({ initialName, locations, people, onSave, onPersonCreated, onClose }: any) {
   const [name, setName] = useState(initialName || "");
   const [ig, setIg] = useState("");
   const [website, setWebsite] = useState("");
   const [country, setCountry] = useState<any>(null);
   const [city, setCity] = useState<any>(null);
+  const [cdPerson, setCdPerson] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      const result = await fetch(`${SUPABASE_URL}/rest/v1/brands`, {
+      // 1. Create brand
+      const brandRes = await fetch(`${SUPABASE_URL}/rest/v1/brands`, {
         method: "POST",
         headers: { ...H, Prefer: "return=representation" },
         body: JSON.stringify({ name: name.trim(), slug: slugify(name), instagram_handle: ig.trim() || null, website: website.trim() || null, country_id: country?.id || null, city_id: city?.id || null }),
       });
-      if (!result.ok) throw new Error(await result.text());
-      const [created] = await result.json();
-      onSave(created);
+      if (!brandRes.ok) throw new Error(await brandRes.text());
+      const [createdBrand] = await brandRes.json();
+
+      // 2. Handle creative director
+      let cdPersonId = cdPerson?.isNew ? null : cdPerson?.id;
+      if (cdPerson?.isNew && cdPerson.name) {
+        const personRes = await fetch(`${SUPABASE_URL}/rest/v1/people`, {
+          method: "POST",
+          headers: { ...H, Prefer: "return=representation" },
+          body: JSON.stringify({ name: cdPerson.name.trim(), slug: slugify(cdPerson.name), primary_role: "creative_director" }),
+        });
+        if (!personRes.ok) throw new Error(await personRes.text());
+        const [createdPerson] = await personRes.json();
+        cdPersonId = createdPerson.id;
+        if (onPersonCreated) onPersonCreated(createdPerson);
+      }
+      if (cdPersonId && createdBrand.id) {
+        await fetch(`${SUPABASE_URL}/rest/v1/brand_directors`, {
+          method: "POST",
+          headers: { ...H, Prefer: "return=minimal" },
+          body: JSON.stringify({ brand_id: createdBrand.id, person_id: cdPersonId, is_current: true }),
+        });
+      }
+
+      onSave(createdBrand);
     } catch (e: any) { alert(e.message); }
     setSaving(false);
   };
@@ -178,7 +202,7 @@ function CreateBrandModal({ initialName, locations, onSave, onClose }: any) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ background: C.lift1, borderRadius: 18, width: "100%", maxWidth: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+      <div style={{ background: C.lift1, borderRadius: 18, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${C.lift2}` }}>
           <span style={{ fontSize: 14, fontWeight: 600, color: "#ececec" }}>New Brand</span>
           <button tabIndex={-1} onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 22, cursor: "pointer", padding: 0 }}>×</button>
@@ -187,8 +211,27 @@ function CreateBrandModal({ initialName, locations, onSave, onClose }: any) {
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={lbl}>Name *</label><input value={name} onChange={e => setName(e.target.value)} autoFocus style={inp2} /></div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={lbl}>Instagram Handle</label><input value={ig} onChange={e => setIg(e.target.value)} placeholder="@handle" style={inp2} /></div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={lbl}>Website</label><input value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." style={inp2} /></div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={lbl}>Country</label><Typeahead items={countries} value={country} onChange={setCountry} onClear={() => setCountry(null)} placeholder="Search country..." /></div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={lbl}>City</label><Typeahead items={cities} value={city} onChange={setCity} onClear={() => setCity(null)} placeholder="Search city..." /></div>
+          {countries.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={lbl}>Country</label><Typeahead items={countries} value={country} onChange={setCountry} onClear={() => setCountry(null)} placeholder="Search country..." /></div>}
+          {cities.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={lbl}>City</label><Typeahead items={cities} value={city} onChange={setCity} onClear={() => setCity(null)} placeholder="Search city..." /></div>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <label style={lbl}>Creative Director</label>
+            {cdPerson ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: C.lift3, borderRadius: 10, padding: "8px 12px" }}>
+                <span style={{ flex: 1, fontSize: 13, color: "#ececec" }}>{cdPerson.name}</span>
+                {cdPerson.isNew && <span style={{ fontSize: 11, color: C.muted }}>new person</span>}
+                <button onClick={() => setCdPerson(null)} tabIndex={-1} style={{ background: "none", border: "none", color: C.muted, fontSize: 18, cursor: "pointer", padding: 0, lineHeight: 1 }}>×</button>
+              </div>
+            ) : (
+              <Typeahead
+                items={people || []}
+                value={null}
+                onChange={setCdPerson}
+                onClear={() => setCdPerson(null)}
+                placeholder="Search or create..."
+                onCreateClick={(n: string) => setCdPerson({ isNew: true, name: n, id: null })}
+              />
+            )}
+          </div>
         </div>
         <div style={{ padding: "14px 20px", borderTop: `1px solid ${C.lift2}`, display: "flex", justifyContent: "flex-end", gap: 10 }}>
           <button tabIndex={-1} onClick={onClose} style={{ background: C.lift2, border: "none", color: C.muted, padding: "8px 18px", fontSize: 13, cursor: "pointer", borderRadius: 20, fontFamily: "Inter,sans-serif" }}>Cancel</button>
@@ -998,6 +1041,8 @@ export default function ReviewQueue() {
         <CreateBrandModal
           initialName={brandModal.name}
           locations={locations}
+          people={people}
+          onPersonCreated={(p: any) => setPeople(prev => [...prev, p].sort((a, b) => a.name.localeCompare(b.name)))}
           onClose={() => setBrandModal(null)}
           onSave={(created: any) => {
             setBrands(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
