@@ -32,7 +32,7 @@ export default function TagStudio() {
   const [brandFilter, setBrandFilter] = useState(() => { try { return localStorage.getItem("ts_brand") || "all"; } catch { return "all"; } });
   const [statusFilter, setStatusFilter] = useState<string>(() => { try { return localStorage.getItem("ts_status") || "published"; } catch { return "published"; } });
   const [untaggedOnly, setUntaggedOnly] = useState(false);
-  const [sortMode, setSortMode] = useState<"default" | "newest">(() => { try { return (localStorage.getItem("ts_sort") as any) || "default"; } catch { return "default"; } });
+  const [sortMode, setSortMode] = useState<"newest" | "oldest">(() => { try { return (localStorage.getItem("ts_sort") as any) || "newest"; } catch { return "newest"; } });
   const [taggedLookIds, setTaggedLookIds] = useState<Set<string>>(new Set());
   const [jumpInput, setJumpInput] = useState("");
   const [filtered, setFiltered] = useState<any[]>([]);
@@ -69,6 +69,7 @@ export default function TagStudio() {
     if (tagFilterLookIds !== null) f = f.filter(l => tagFilterLookIds.has(l.id));
     if (untaggedOnly) f = f.filter(l => !taggedLookIds.has(l.id));
     if (sortMode === "newest") f = [...f].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+    if (sortMode === "oldest") f = [...f].sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
     setFiltered(f);
     setIdx(i => Math.min(i, Math.max(0, f.length - 1)));
   }, [brandFilter, statusFilter, untaggedOnly, sortMode, tagFilterLookIds, looks, taggedLookIds]);
@@ -171,11 +172,11 @@ export default function TagStudio() {
   };
 
   const browseLooks = (() => {
-    if (browseTagIds.size === 0) return looks;
+    if (browseTagIds.size === 0) return filtered;
     const selectedIds = Array.from(browseTagIds);
     const sets = selectedIds.map(tid => lookIdCache[tid]).filter(Boolean);
-    if (sets.length !== selectedIds.length) return looks;
-    return looks.filter(l => sets.every(s => s.has(l.id)));
+    if (sets.length !== selectedIds.length) return filtered;
+    return filtered.filter(l => sets.every(s => s.has(l.id)));
   })();
 
   const enterEditFromBrowse = (lookId: string) => {
@@ -485,8 +486,8 @@ export default function TagStudio() {
 
           <select value={sortMode} onChange={e => { setSortMode(e.target.value as any); setIdx(0); }}
             style={{background:"#484848",border:"1px solid #606060",color:C.text,padding:"7px 12px",fontSize:13,borderRadius:20,outline:"none",cursor:"pointer",fontFamily:"Inter,sans-serif",fontWeight:500}}>
-            <option value="default">Sort: By brand</option>
             <option value="newest">Sort: Newest first</option>
+            <option value="oldest">Sort: Oldest first</option>
           </select>
 
           <button onClick={() => { setUntaggedOnly(v => !v); setIdx(0); }}
