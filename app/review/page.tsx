@@ -352,7 +352,6 @@ export default function ReviewQueue() {
   });
   const [selected, setSelected] = useState<Look | null>(null);
   const [saving, setSaving] = useState(false);
-  const [counts, setCounts] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
   const [sceneFilter, setSceneFilter] = useState("");
   const [pubFilter, setPubFilter] = useState("");
@@ -402,13 +401,23 @@ export default function ReviewQueue() {
   );
 
   useEffect(() => { loadEntities(); }, []);
-  useEffect(() => { loadLooks(); }, [statusFilter]);
+  useEffect(() => { loadLooks(); }, []);
 
   // Open look from URL param once the list is loaded
   useEffect(() => {
     if (loading || !pendingLookId.current || looks.length === 0) return;
     const look = looks.find(l => l.id === pendingLookId.current);
-    if (look) { selectLook(look); pendingLookId.current = null; }
+    if (look) {
+      // Switch to the look's status tab so it's visible in the list
+      setStatusFilter(look.status as any);
+      selectLook(look);
+      pendingLookId.current = null;
+      // Scroll the row into view after the status filter updates
+      setTimeout(() => {
+        const el = document.getElementById(`look-row-${look.id}`);
+        if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+      }, 150);
+    }
   }, [loading, looks]); // eslint-disable-line
 
   const loadEntities = async () => {
@@ -429,13 +438,7 @@ export default function ReviewQueue() {
   const loadLooks = async () => {
     setLoading(true); setSelected(null); setLoadError(null);
     try {
-      const allLooks = await sb("looks?select=status");
-      const c: Record<string, number> = { draft: 0, published: 0, archived: 0 };
-      allLooks.forEach((l: any) => { c[l.status] = (c[l.status] || 0) + 1; });
-      setCounts(c);
-
-      const filter = statusFilter === "all" ? "" : `status=eq.${statusFilter}&`;
-      const data = await sb(`looks?${filter}select=id,status,cloudinary_url,source_url,source_name,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,is_collaboration,event_id,collection_title,collection_description,publication_id,publication_issue_month,publication_issue_year,tag_count,look_brand_credits(brand_id,credit_order,brands(name)),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`);
+      const data = await sb(`looks?select=id,status,cloudinary_url,source_url,source_name,scene,gender,season_display,season_term,season_year,date_published,is_key_look,notes,created_at,is_collaboration,event_id,collection_title,collection_description,publication_id,publication_issue_month,publication_issue_year,tag_count,look_brand_credits(brand_id,credit_order,brands(name)),look_credits!look_credits_look_id_fkey(id)&order=created_at.desc&limit=1000`);
 
       setLooks(data.map((l: any) => {
         const rows = (l.look_brand_credits || []).slice().sort((a: any, b: any) => (a.credit_order ?? 0) - (b.credit_order ?? 0));
@@ -489,6 +492,11 @@ export default function ReviewQueue() {
     setEditEvent(look.event_id ? events.find(e => e.id === look.event_id) || { id: look.event_id, name: look.event_id } : null);
     loadDetail(look.id);
     clearChecked();
+    // Scroll this row into view
+    setTimeout(() => {
+      const el = document.getElementById(`look-row-${look.id}`);
+      if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, 50);
   };
 
   // ── Delete ────────────────────────────────────────────────────────────────
@@ -513,10 +521,6 @@ export default function ReviewQueue() {
       }
       // Refresh list — remove the deleted look, decrement count, close detail if open
       setLooks(prev => prev.filter(l => l.id !== target.id));
-      setCounts(prev => ({
-        ...prev,
-        [target.status]: Math.max(0, (prev[target.status] || 1) - 1),
-      }));
       if (selected?.id === target.id) setSelected(null);
       setDeletePending(null);
     } catch (e: any) {
@@ -668,7 +672,15 @@ export default function ReviewQueue() {
   const inp = { background: C.lift3, border: "none" as const, color: C.text, padding: "8px 12px", fontSize: 13, borderRadius: 10, outline: "none", width: "100%", boxSizing: "border-box" as const, fontFamily: "Inter,sans-serif" };
   const sel = { ...inp, cursor: "pointer" as const };
 
+  // Counts derived from all loaded looks (client-side)
+  const counts = {
+    draft: looks.filter(l => l.status === "draft").length,
+    published: looks.filter(l => l.status === "published").length,
+    archived: looks.filter(l => l.status === "archived").length,
+  };
+
   const filteredLooks = looks.filter(l => {
+    if (statusFilter !== "all" && l.status !== statusFilter) return false;
     if (search.trim()) {
       const s = search.toLowerCase();
       const matchesBrand = l.brands_display.toLowerCase().includes(s);
@@ -775,7 +787,7 @@ export default function ReviewQueue() {
                   {filteredLooks.map(look => {
                     const isActive = selected?.id === look.id;
                     return (
-                      <tr key={look.id} className={`look-row${isActive?" active":""}`}
+                      <tr key={look.id} id={`look-row-${look.id}`} className={`look-row${isActive?" active":""}`}
                         onClick={() => selectLook(look)}
                         style={{ borderBottom: `1px solid ${C.lift1}`, cursor: "pointer", background: isActive ? C.lift1 : "transparent", borderLeft: isActive ? `2px solid ${C.white}` : "2px solid transparent" }}>
                         <td style={{ padding: "6px 10px", width: 52 }}>
