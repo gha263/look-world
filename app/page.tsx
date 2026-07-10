@@ -65,7 +65,8 @@ export default function TagStudio() {
   useEffect(() => {
     let f = looks;
     if (statusFilter !== "all") f = f.filter(l => l.status === statusFilter);
-    if (brandFilter !== "all") f = f.filter(l => l.primaryBrandId === brandFilter);
+    if (brandFilter === "__unattributed__") f = f.filter(l => !l.primaryBrandId);
+    else if (brandFilter !== "all") f = f.filter(l => l.primaryBrandId === brandFilter);
     if (tagFilterLookIds !== null) f = f.filter(l => tagFilterLookIds.has(l.id));
     if (untaggedOnly) f = f.filter(l => !taggedLookIds.has(l.id));
     if (sortMode === "newest") f = [...f].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
@@ -461,6 +462,7 @@ export default function TagStudio() {
           <select value={brandFilter} onChange={e => handleBrandFilter(e.target.value)}
             style={{background:"#484848",border:"1px solid #606060",color:C.text,padding:"7px 12px",fontSize:13,borderRadius:20,outline:"none",cursor:"pointer",fontFamily:"Inter,sans-serif",fontWeight:500}}>
             <option value="all">All Brands</option>
+            <option value="__unattributed__">Unattributed</option>
             {brands.map((b:any) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
 
@@ -590,12 +592,18 @@ export default function TagStudio() {
                         <img src={l.cloudinary_url} alt="" loading="lazy"
                           style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}
                         />
+                        <span style={{
+                          position:"absolute", top:6, right:6,
+                          fontSize:9, fontWeight:700, letterSpacing:"0.07em",
+                          textTransform:"uppercase", padding:"2px 6px", borderRadius:6,
+                          background: l.status === "published" ? "rgba(76,175,110,0.85)" : l.status === "draft" ? "rgba(240,165,0,0.85)" : "rgba(80,80,80,0.85)",
+                          color: "#fff",
+                        }}>{l.status}</span>
                       </div>
-                      <div style={{padding:"6px 8px",display:"flex",flexDirection:"column",gap:1}}>
-                        <span style={{fontSize:12,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                      <div style={{padding:"5px 8px"}}>
+                        <span style={{fontSize:12,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",display:"block"}}>
                           {l.brands?.name || "—"}
                         </span>
-                        <span style={{fontSize:11,color:C.muted}}>{l.season_display || ""}</span>
                       </div>
                     </div>
                   ))}
