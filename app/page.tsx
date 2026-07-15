@@ -361,6 +361,42 @@ export default function TagStudio() {
     setSaving(false); setFlash(true); setTimeout(() => setFlash(false), 900);
   };
 
+  const rejectTag = async (tagId: string) => {
+    const look = filtered[idx];
+    if (!look) return;
+    setSaving(true);
+    try {
+      // Soft-reject: keep the row for audit trail, just flip status off "approved"
+      await sb(
+        `entity_tags?entity_id=eq.${look.id}&tag_id=eq.${tagId}&entity_type=eq.look&source=eq.ai`,
+        { method: "PATCH", prefer: "", body: JSON.stringify({ status: "rejected" }) }
+      );
+      const newAi = new Set(aiApprovedTagIds);
+      newAi.delete(tagId);
+      setAiApprovedTagIds(newAi);
+
+      if (!humanTagIds.has(tagId)) {
+        const next = new Set(activeTags);
+        next.delete(tagId);
+        setActiveTags(next);
+        setTagCounts(prev => ({ ...prev, [tagId]: Math.max(0, (prev[tagId] ?? 1) - 1) }));
+        setLookIdCache(prev => {
+          if (!prev[tagId]) return prev;
+          const s = new Set(prev[tagId]); s.delete(look.id);
+          return { ...prev, [tagId]: s };
+        });
+        if (tagFilterId === tagId) {
+          setTagFilterLookIds(prev => {
+            if (!prev) return prev;
+            const s = new Set(prev); s.delete(look.id); return s;
+          });
+        }
+      }
+      if (primaryTagId === tagId) setPrimaryTagId(null);
+    } catch(e) { console.error(e); }
+    setSaving(false); setFlash(true); setTimeout(() => setFlash(false), 900);
+  };
+
   const setPrimary = async (tagId: string) => {
     const look = filtered[idx];
     if (!look) return;
@@ -779,12 +815,13 @@ export default function TagStudio() {
                             style={{
                               background: isHumanConfirmed ? C.white : isAiOnly ? "rgba(76,175,110,0.18)" : C.lift1,
                               border: isAiOnly ? "1px solid rgba(76,175,110,0.35)" : "none",
+                              borderRight: isAiOnly ? "none" : undefined,
                               color: isHumanConfirmed ? "#212121" : isAiOnly ? C.green : C.text,
                               padding: "6px 14px",
                               fontSize: 13,
                               fontWeight: isHumanConfirmed ? 600 : 400,
                               cursor: "pointer",
-                              borderRadius: isColor && on ? "0 20px 20px 0" : 20,
+                              borderRadius: `${isColor && on ? 0 : 20}px ${isAiOnly ? 0 : 20}px ${isAiOnly ? 0 : 20}px ${isColor && on ? 0 : 20}px`,
                               fontFamily: "Inter,sans-serif",
                               transition: "all 0.1s",
                               textDecoration: tag.definition ? "underline dotted" : "none",
@@ -794,6 +831,27 @@ export default function TagStudio() {
                             {isHumanConfirmed && !isColor ? " ✓" : ""}
                             {isAiOnly ? " ✦" : ""}
                           </button>
+                          {isAiOnly && (
+                            <button onClick={e => { e.stopPropagation(); rejectTag(tag.id); }}
+                              title="Dismiss — not a match"
+                              onMouseEnter={e => { e.currentTarget.style.background = "rgba(224,90,78,0.25)"; e.currentTarget.style.color = C.red; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = "rgba(76,175,110,0.18)"; e.currentTarget.style.color = C.green; }}
+                              style={{
+                                background: "rgba(76,175,110,0.18)",
+                                border: "1px solid rgba(76,175,110,0.35)",
+                                borderLeft: "1px solid rgba(255,255,255,0.15)",
+                                color: C.green,
+                                padding: "6px 10px",
+                                fontSize: 13,
+                                lineHeight: 1,
+                                cursor: "pointer",
+                                borderRadius: "0 20px 20px 0",
+                                fontFamily: "Inter,sans-serif",
+                                transition: "all 0.1s",
+                              }}>
+                              ×
+                            </button>
+                          )}
                         </div>
                       );
                     })}
