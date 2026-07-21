@@ -227,7 +227,7 @@ function CreateBrandModal({ initialName, locations, people, onSave, onPersonCrea
         const personRes = await fetch(`${SUPABASE_URL}/rest/v1/people`, {
           method: "POST",
           headers: { ...H, Prefer: "return=representation" },
-          body: JSON.stringify({ name: cdPerson.name.trim(), slug: slugify(cdPerson.name), primary_role: "creative_director" }),
+          body: JSON.stringify({ name: cdPerson.name.trim(), slug: slugify(cdPerson.name), primary_role: "designer" }),
         });
         if (!personRes.ok) throw new Error(await personRes.text());
         const [createdPerson] = await personRes.json();
@@ -255,7 +255,7 @@ function CreateBrandModal({ initialName, locations, people, onSave, onPersonCrea
       <Typeahead label="Country" items={locations.filter((l: any) => l.location_type === "country")} value={country} onChange={setCountry} onClear={() => setCountry(null)} />
       <Typeahead label="City" items={locations.filter((l: any) => l.location_type === "city")} value={city} onChange={setCity} onClear={() => setCity(null)} />
       <Typeahead
-        label="Creative Director"
+        label="Designer"
         items={people || []}
         value={cdPerson?.isNew ? null : cdPerson}
         onChange={setCdPerson}
@@ -274,21 +274,33 @@ function CreateBrandModal({ initialName, locations, people, onSave, onPersonCrea
   );
 }
 
-function CreatePersonModal({ initialName, role, roles, onSave, onClose, onCreateRole }: any) {
+function CreatePersonModal({ initialName, role, roles, brands, onSave, onClose, onCreateRole }: any) {
   const [name, setName] = useState(initialName || "");
   const [ig, setIg] = useState("");
   const [website, setWebsite] = useState("");
   const [selectedRole, setSelectedRole] = useState<any>(
     () => roles.find((r: any) => r.slug === (role || "").replace(/_/g, "-")) || null
   );
+  // Designer is the one role where a person implies a brand. Every other
+  // role (photographer, stylist, etc.) stays person-only. For designers,
+  // brand status is a required explicit choice — link one, or confirm
+  // there isn't one (e.g. recent graduate, independent, pre-launch) — so
+  // "no brand yet" and "nobody checked" are never the same state in the data.
+  const [brand, setBrand] = useState<any>(null); // existing brand or {isNew: true, name}
+  const [noBrandConfirmed, setNoBrandConfirmed] = useState(false);
+  const isDesigner = selectedRole?.slug === "designer";
+  const brandChoicePending = isDesigner && !brand && !noBrandConfirmed;
+
   return (
-    <Modal title="New Person" onClose={onClose} saveDisabled={!name.trim()}
+    <Modal title="New Person" onClose={onClose} saveDisabled={!name.trim() || brandChoicePending}
       onSave={() => onSave({
         name: name.trim(),
         primary_role: selectedRole?.name || null,
         instagram_url: ig || null,
         website: website || null,
         slug: slugify(name),
+        brand: isDesigner ? brand : null,
+        noBrandConfirmed: isDesigner ? noBrandConfirmed : false,
       })}>
       <F label="Name *"><input style={s.input} value={name} onChange={e => setName(e.target.value)} autoFocus /></F>
       <F label="Role">
@@ -306,6 +318,42 @@ function CreatePersonModal({ initialName, role, roles, onSave, onClose, onCreate
       </F>
       <F label="Instagram URL"><input style={s.input} value={ig} onChange={e => setIg(e.target.value)} placeholder="https://instagram.com/handle" /></F>
       <F label="Website"><input style={s.input} value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." /></F>
+      {isDesigner && (
+        <>
+          <Typeahead
+            label="Brand"
+            items={brands || []}
+            value={brand?.isNew ? null : brand}
+            onChange={(b: any) => { setBrand(b); setNoBrandConfirmed(false); }}
+            onClear={() => setBrand(null)}
+            placeholder="Search or create brand..."
+            onCreateClick={(n: string) => { setBrand({ isNew: true, name: n, id: null }); setNoBrandConfirmed(false); }}
+          />
+          {brand?.isNew && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: s.input.backgroundColor, borderRadius: 12, fontSize: 13 }}>
+              <span style={{ color: "#ececec", flex: 1 }}>{brand.name}</span>
+              <span style={{ color: "#8e8ea0", fontSize: 11 }}>new brand</span>
+              <button onClick={() => setBrand(null)} tabIndex={-1} style={{ background: "none", border: "none", color: "#8e8ea0", fontSize: 18, cursor: "pointer", padding: 0, lineHeight: 1 }}>×</button>
+            </div>
+          )}
+          {!brand && (
+            <label style={{ ...s.ckLabel, fontSize: 13 }}>
+              <input
+                type="checkbox"
+                checked={noBrandConfirmed}
+                onChange={e => setNoBrandConfirmed(e.target.checked)}
+                style={s.ck}
+              />
+              No brand — confirmed (e.g. recent graduate, independent, pre-launch)
+            </label>
+          )}
+          {brandChoicePending && (
+            <span style={{ fontSize: 12, color: C.dim, marginTop: -4 }}>
+              Link a brand or check "No brand — confirmed" before saving.
+            </span>
+          )}
+        </>
+      )}
     </Modal>
   );
 }
@@ -532,8 +580,36 @@ export default function IntakePage() {
   }
 
   async function handleCreatePerson(data: any) {
-    let c; try { c = await post("people", data); } catch { c = { ...data, id: `local-${Date.now()}` }; }
+    const { brand: brandData, noBrandConfirmed, ...personData } = data;
+    if (noBrandConfirmed) personData.no_brand_confirmed_at = new Date().toISOString();
+    let c; try { c = await post("people", personData); } catch { c = { ...personData, id: `local-${Date.now()}` }; }
     setPeople(p => [...p, c].sort((a: any, b: any) => a.name.localeCompare(b.name)));
+
+    // Designer + brand specified → create/link the brand so this person is
+    // never left floating with no brand_directors row. Mirrors handleSave
+    // in CreateBrandModal, just in the opposite direction.
+    if (brandData && c.id && !c.id.startsWith("local-")) {
+      try {
+        let brandId = brandData.isNew ? null : brandData.id;
+        if (brandData.isNew && brandData.name) {
+          const createdBrand = await post("brands", { name: brandData.name.trim(), slug: slugify(brandData.name) });
+          brandId = createdBrand.id;
+          setBrands(prev => [...prev, createdBrand].sort((a: any, b: any) => a.name.localeCompare(b.name)));
+        }
+        if (brandId) {
+          await fetch(`${SUPABASE_URL}/rest/v1/brand_directors`, {
+            method: "POST",
+            headers: { ...H, Prefer: "return=minimal" },
+            body: JSON.stringify({ brand_id: brandId, person_id: c.id, is_current: true }),
+          });
+        }
+      } catch (e: any) {
+        // Person was already created successfully — don't block on the brand link failing.
+        // Surface it so it doesn't fail silently and re-create the exact gap we're fixing.
+        alert(`Person created, but brand link failed: ${e.message}`);
+      }
+    }
+
     if (modal?.target?.startsWith("contributor:")) updateContributorPerson(modal.target.split(":")[1], c);
     setModal(null);
   }
@@ -832,7 +908,7 @@ export default function IntakePage() {
         </div>
 
         {modal?.type === "brand" && <CreateBrandModal initialName={modal.name} locations={locations} people={people} onSave={handleCreateBrand} onPersonCreated={(p: any) => setPeople(prev => [...prev, p].sort((a: any, b: any) => a.name.localeCompare(b.name)))} onClose={() => setModal(null)} />}
-        {modal?.type === "person" && <CreatePersonModal initialName={modal.name} role={modal.role} roles={creditRoles} onSave={handleCreatePerson} onClose={() => setModal(null)} onCreateRole={createRoleForModal} />}
+        {modal?.type === "person" && <CreatePersonModal initialName={modal.name} role={modal.role} roles={creditRoles} brands={brands} onSave={handleCreatePerson} onClose={() => setModal(null)} onCreateRole={createRoleForModal} />}
         {modal?.type === "event" && <CreateEventModal initialName={modal.name} locations={locations} onSave={handleCreateEvent} onClose={() => setModal(null)} />}
         {modal?.type === "publication" && <CreatePublicationModal initialName={modal.name} locations={locations} onSave={handleCreatePublication} onClose={() => setModal(null)} />}
       </div>
