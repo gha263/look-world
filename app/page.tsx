@@ -403,13 +403,13 @@ export default function TagStudio() {
     setSaving(true);
     try {
       await sb(`entity_tags?entity_id=eq.${look.id}&entity_type=eq.look&source=eq.human&is_primary=eq.true`, {
-        method:"PATCH", prefer:"", body: JSON.stringify({ is_primary: false }),
+        method:"PATCH", prefer:"", body: JSON.stringify({ is_primary: false, is_primary_confirmed: false }),
       });
       if (primaryTagId === tagId) {
         setPrimaryTagId(null);
       } else {
         await sb(`entity_tags?entity_id=eq.${look.id}&tag_id=eq.${tagId}&entity_type=eq.look&source=eq.human`, {
-          method:"PATCH", prefer:"", body: JSON.stringify({ is_primary: true }),
+          method:"PATCH", prefer:"", body: JSON.stringify({ is_primary: true, is_primary_confirmed: true }),
         });
         setPrimaryTagId(tagId);
       }
