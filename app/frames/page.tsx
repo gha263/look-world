@@ -207,7 +207,7 @@ function LookCountPreview({ tags }: { tags: any[] }) {
       for (const tag of tags) {
         const isColor = tag.tag_type === "color";
         const filter = isColor
-          ? `entity_tags?tag_id=eq.${tag.id}&entity_type=eq.look&is_primary=eq.true&select=entity_id`
+          ? `entity_tags?tag_id=eq.${tag.id}&entity_type=eq.look&is_primary=eq.true&is_primary_confirmed=eq.true&select=entity_id`
           : `entity_tags?tag_id=eq.${tag.id}&entity_type=eq.look&select=entity_id`;
         const rows = await sb(filter);
         const tagIds = rows.map((r: any) => r.entity_id);
@@ -424,7 +424,7 @@ export default function FramesPage() {
       for (const tag of tags) {
         const isColor = tag.tag_type === "color";
         const filter = isColor
-          ? `entity_tags?tag_id=eq.${tag.id}&entity_type=eq.look&is_primary=eq.true&select=entity_id`
+          ? `entity_tags?tag_id=eq.${tag.id}&entity_type=eq.look&is_primary=eq.true&is_primary_confirmed=eq.true&select=entity_id`
           : `entity_tags?tag_id=eq.${tag.id}&entity_type=eq.look&select=entity_id`;
         const rows = await sb(filter);
         const tagIds = rows.map((r: any) => r.entity_id);
