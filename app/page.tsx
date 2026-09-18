@@ -292,11 +292,16 @@ export default function TagStudio() {
     else setLoading(true);
     try {
       const [l, t, humanTagged, aiTagged] = await Promise.all([
+        // `caption` was dropped from `looks` in the Sept 2026 schema cleanup —
+        // requesting it made PostgREST reject the whole SELECT with a 400,
+        // which the client silently swallowed into an empty list (the "1/0
+        // No looks" screen). Removed.
+        //
         // credit_order was dropped from look_brand_credits by the Aug 2026
         // flip_designer_attribution migration — pull created_at instead so
         // the "primary brand" derived from credits[0] is deterministic
         // across renders (earliest INSERT wins, ties broken by brand_id).
-        sb("looks?select=id,cloudinary_url,caption,season_display,source_url,notes,status,created_at,image_mode,look_brand_credits(brand_id,created_at,brands(id,name))&order=created_at.desc&limit=2000"),
+        sb("looks?select=id,cloudinary_url,season_display,source_url,notes,status,created_at,image_mode,look_brand_credits(brand_id,created_at,brands(id,name))&order=created_at.desc&limit=2000"),
         sb("tags?select=*&order=tag_type,name"),
         // Two separate queries to avoid row limit issues on large tables
         sb("entity_tags?entity_type=eq.look&source=eq.human&select=entity_id&limit=10000"),
