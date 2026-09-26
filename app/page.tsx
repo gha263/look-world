@@ -79,6 +79,13 @@ export default function TagStudio() {
     try { return (localStorage.getItem("ts_sort") as any) || "newest"; } catch { return "newest"; }
   });
   const [taggedLookIds, setTaggedLookIds] = useState<Set<string>>(new Set());
+  // Tag ids that have at least one entity_tags row (human OR ai-approved).
+  // Used to filter the toolbar tag dropdown so it doesn't offer tags that
+  // have never been applied — filtering by one of those would return zero
+  // looks and just wastes a step. The tag panel typeahead does NOT use
+  // this; it needs the full vocab so a newly-created tag can be applied
+  // before it has any uses yet.
+  const [usedTagIds, setUsedTagIds] = useState<Set<string>>(new Set());
   const [jumpInput, setJumpInput] = useState("");
   const [filtered, setFiltered] = useState<any[]>([]);
   const [newName, setNewName] = useState("");
@@ -338,9 +345,11 @@ export default function TagStudio() {
         // Two separate queries to avoid row limit issues on large tables.
         // entity_tags carries ~2,556 duplicate (entity_id, tag_id) rows for
         // entity_type='look' — Set() dedupes membership below, so the raw
-        // dupes don't leak into UI state.
-        sb("entity_tags?entity_type=eq.look&source=eq.human&select=entity_id&limit=10000"),
-        sb("entity_tags?entity_type=eq.look&source=eq.ai&status=eq.approved&select=entity_id&limit=10000"),
+        // dupes don't leak into UI state. tag_id is pulled alongside
+        // entity_id so we can also derive `usedTagIds` (tags with any
+        // real usage) for the toolbar dropdown filter.
+        sb("entity_tags?entity_type=eq.look&source=eq.human&select=entity_id,tag_id&limit=10000"),
+        sb("entity_tags?entity_type=eq.look&source=eq.ai&status=eq.approved&select=entity_id,tag_id&limit=10000"),
       ]);
       // Build brand name from primary look_brand_credits entry (earliest
       // created_at wins; brand_id lexicographic breaks ties for rows
@@ -365,6 +374,10 @@ export default function TagStudio() {
         ...(humanTagged || []).map((r: any) => r.entity_id as string),
         ...(aiTagged || []).map((r: any) => r.entity_id as string),
       ]);
+      const usedTagSet = new Set<string>([
+        ...(humanTagged || []).map((r: any) => r.tag_id as string),
+        ...(aiTagged || []).map((r: any) => r.tag_id as string),
+      ]);
       // Derive brand list from loaded looks — only brands that actually have looks
       const brandsMap = new Map<string, string>();
       looksWithBrand.forEach((look: any) => {
@@ -381,6 +394,7 @@ export default function TagStudio() {
       setBrands(derivedBrands);
       setTagsByType(grouped);
       setTaggedLookIds(taggedSet);
+      setUsedTagIds(usedTagSet);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -470,6 +484,16 @@ export default function TagStudio() {
         next.add(tagId);
         setActiveTags(next);
         setTaggedLookIds(prev => { const s = new Set(prev); s.add(look.id); return s; });
+        // Track that this tag now has at least one usage so the toolbar
+        // filter dropdown surfaces it without waiting for a page reload.
+        // We don't try to remove tags from usedTagIds on the delete path
+        // — knowing "this was the last usage" would need another query,
+        // and a slightly stale filter option is a smaller cost than an
+        // extra round-trip on every tag toggle.
+        setUsedTagIds(prev => {
+          if (prev.has(tagId)) return prev;
+          const s = new Set(prev); s.add(tagId); return s;
+        });
         setTagCounts(prev => ({ ...prev, [tagId]: (prev[tagId] ?? 0) + 1 }));
         setLookIdCache(prev => {
           if (!prev[tagId]) return prev;
@@ -632,13 +656,21 @@ export default function TagStudio() {
           <select value={tagFilterId} onChange={e => handleTagFilter(e.target.value)}
             style={{ background: "#484848", border: "1px solid #606060", color: C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, outline: "none", cursor: "pointer", fontFamily: "Inter,sans-serif", fontWeight: 500, opacity: tagFilterLoading ? 0.6 : 1, width: 160, flexShrink: 0 }}>
             <option value="all">{tagFilterLoading ? "Loading…" : "All Tags"}</option>
-            {orderedTypes.map(type => (
-              <optgroup key={type} label={TYPE_LABELS[type] || type}>
-                {(tagsByType[type] || []).map((tag: any) => (
-                  <option key={tag.id} value={tag.id}>{tag.name}</option>
-                ))}
-              </optgroup>
-            ))}
+            {orderedTypes.map(type => {
+              // Filter each type's tags to only those with at least one
+              // real usage. Skip the whole optgroup when nothing qualifies —
+              // otherwise the dropdown surfaces vocabulary entries that
+              // would return zero results.
+              const usable = (tagsByType[type] || []).filter((tag: any) => usedTagIds.has(tag.id));
+              if (usable.length === 0) return null;
+              return (
+                <optgroup key={type} label={TYPE_LABELS[type] || type}>
+                  {usable.map((tag: any) => (
+                    <option key={tag.id} value={tag.id}>{tag.name}</option>
+                  ))}
+                </optgroup>
+              );
+            })}
           </select>
 
           <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setIdx(0); }}
