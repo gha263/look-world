@@ -324,11 +324,16 @@ export default function TagStudio() {
     setLoading(true);
     try {
       const [l, t, humanTagged, aiTagged] = await Promise.all([
+        // `caption` is dropped (memory previously flagged it as "vestigial —
+        // do not populate"; it has since been removed from the schema
+        // entirely, so selecting it fails the whole query with a 42703 and
+        // strands `looks` at empty). Not used anywhere in the render either.
+        //
         // `credit_order` was dropped from look_brand_credits by the Aug 14
         // flip_designer_attribution migration — pulling `created_at` instead
         // so the "primary brand" derived from credits[0] is deterministic
         // across renders (earliest INSERT wins, ties broken by brand_id).
-        sb("looks?select=id,cloudinary_url,caption,season_display,source_url,notes,status,created_at,image_mode,look_brand_credits(brand_id,created_at,brands(id,name))&order=created_at.desc&limit=2000"),
+        sb("looks?select=id,cloudinary_url,season_display,source_url,notes,status,created_at,image_mode,look_brand_credits(brand_id,created_at,brands(id,name))&order=created_at.desc&limit=2000"),
         sb("tags?select=*&order=tag_type,name"),
         // Two separate queries to avoid row limit issues on large tables.
         // entity_tags carries ~2,556 duplicate (entity_id, tag_id) rows for
@@ -888,6 +893,18 @@ export default function TagStudio() {
 
             <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 20, background: C.bg }}>
 
+              {/* Nothing to tag when the filtered list is empty — hide the
+                  whole tag-panel machinery (typeahead, empty state, New Tag)
+                  since it would otherwise render against a nonexistent look
+                  and any interaction would fail. Left panel already shows
+                  its own "No looks" message next to this. */}
+              {!look ? (
+                <div style={{ fontSize: 13, color: C.dim, fontStyle: "italic", paddingTop: 8 }}>
+                  Select a look to tag it.
+                </div>
+              ) : (
+                <>
+
               {/* AI tag legend — shown when current look has AI-only tags */}
               {aiApprovedTagIds.size > humanTagIds.size && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "rgba(76,175,110,0.08)", borderRadius: 10, border: "1px solid rgba(76,175,110,0.2)" }}>
@@ -1047,6 +1064,8 @@ export default function TagStudio() {
                   </div>
                 )}
               </div>
+                </>
+              )}
             </div>
           </div>
         )}
