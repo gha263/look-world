@@ -604,9 +604,18 @@ export default function TagStudio() {
 
       <div style={{ fontFamily: "Inter,sans-serif", background: C.bg, color: C.text, height: "calc(100vh - 44px)", display: "flex", flexDirection: "column", overflow: "hidden", fontSize: 14, lineHeight: 1.5 }}>
 
-        {/* ── Toolbar ── */}
-        <div style={{ display: "flex", alignItems: "center", padding: "8px 20px", background: C.bg, gap: 16, flexShrink: 0, borderBottom: `1px solid ${C.lift1}` }}>
-          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10 }}>
+        {/* ── Toolbar ──
+            Layout rules:
+              - container: no wrap, horizontal scroll on overflow (narrow
+                viewports degrade gracefully rather than fragmenting rows)
+              - each select gets a fixed width so nothing stretches to fit
+                the longest option (tag filter would otherwise be as wide
+                as "Cultural Garment" plus tag name)
+              - buttons: white-space: nowrap so labels stay on one line
+              - progress bar has a min-width floor so it doesn't disappear
+                when the filter row gets long                                 */}
+        <div style={{ display: "flex", alignItems: "center", padding: "8px 20px", background: C.bg, gap: 10, flexShrink: 0, flexWrap: "nowrap", overflowX: "auto", borderBottom: `1px solid ${C.lift1}` }}>
+          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, minWidth: 180 }}>
             <div style={{ flex: 1, height: 3, background: C.lift2, borderRadius: 2, overflow: "hidden" }}>
               <div style={{ height: "100%", background: C.white, width: `${pct}%`, transition: "width 0.3s", borderRadius: 2 }} />
             </div>
@@ -614,14 +623,14 @@ export default function TagStudio() {
           </div>
 
           <select value={brandFilter} onChange={e => handleBrandFilter(e.target.value)}
-            style={{ background: "#484848", border: "1px solid #606060", color: C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, outline: "none", cursor: "pointer", fontFamily: "Inter,sans-serif", fontWeight: 500 }}>
+            style={{ background: "#484848", border: "1px solid #606060", color: C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, outline: "none", cursor: "pointer", fontFamily: "Inter,sans-serif", fontWeight: 500, width: 140, flexShrink: 0 }}>
             <option value="all">All Brands</option>
             <option value="__unattributed__">Unattributed</option>
             {brands.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
 
           <select value={tagFilterId} onChange={e => handleTagFilter(e.target.value)}
-            style={{ background: "#484848", border: "1px solid #606060", color: C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, outline: "none", cursor: "pointer", fontFamily: "Inter,sans-serif", fontWeight: 500, opacity: tagFilterLoading ? 0.6 : 1 }}>
+            style={{ background: "#484848", border: "1px solid #606060", color: C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, outline: "none", cursor: "pointer", fontFamily: "Inter,sans-serif", fontWeight: 500, opacity: tagFilterLoading ? 0.6 : 1, width: 160, flexShrink: 0 }}>
             <option value="all">{tagFilterLoading ? "Loading…" : "All Tags"}</option>
             {orderedTypes.map(type => (
               <optgroup key={type} label={TYPE_LABELS[type] || type}>
@@ -633,7 +642,7 @@ export default function TagStudio() {
           </select>
 
           <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setIdx(0); }}
-            style={{ background: "#484848", border: "1px solid #606060", color: C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, outline: "none", cursor: "pointer", fontFamily: "Inter,sans-serif", fontWeight: 500 }}>
+            style={{ background: "#484848", border: "1px solid #606060", color: C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, outline: "none", cursor: "pointer", fontFamily: "Inter,sans-serif", fontWeight: 500, width: 120, flexShrink: 0 }}>
             <option value="published">Published</option>
             <option value="archived">Archived</option>
             <option value="draft">Draft</option>
@@ -641,28 +650,28 @@ export default function TagStudio() {
           </select>
 
           <select value={sortMode} onChange={e => { setSortMode(e.target.value as any); setIdx(0); }}
-            style={{ background: "#484848", border: "1px solid #606060", color: C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, outline: "none", cursor: "pointer", fontFamily: "Inter,sans-serif", fontWeight: 500 }}>
+            style={{ background: "#484848", border: "1px solid #606060", color: C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, outline: "none", cursor: "pointer", fontFamily: "Inter,sans-serif", fontWeight: 500, width: 140, flexShrink: 0 }}>
             <option value="newest">Sort: Newest first</option>
             <option value="oldest">Sort: Oldest first</option>
           </select>
 
           <button onClick={() => { setUntaggedOnly(v => !v); setIdx(0); }}
-            style={{ background: untaggedOnly ? C.white : "#484848", border: "1px solid #606060", color: untaggedOnly ? "#212121" : C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, cursor: "pointer", fontFamily: "Inter,sans-serif", fontWeight: untaggedOnly ? 600 : 500 }}>
+            style={{ background: untaggedOnly ? C.white : "#484848", border: "1px solid #606060", color: untaggedOnly ? "#212121" : C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, cursor: "pointer", fontFamily: "Inter,sans-serif", fontWeight: untaggedOnly ? 600 : 500, whiteSpace: "nowrap", flexShrink: 0 }}>
             Untagged only
           </button>
 
           <button onClick={() => { setGridBucketOnly(v => !v); setIdx(0); }}
             title="With a color tag selected, narrow to looks whose grid_bucket_tag_id matches — i.e., the Living Grid bucket for that color, set automatically by the classifier."
-            style={{ background: gridBucketOnly ? C.amber : "#484848", border: "1px solid #606060", color: gridBucketOnly ? "#212121" : C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, cursor: "pointer", fontFamily: "Inter,sans-serif", fontWeight: gridBucketOnly ? 600 : 500 }}>
-            Grid bucket only
+            style={{ background: gridBucketOnly ? C.amber : "#484848", border: "1px solid #606060", color: gridBucketOnly ? "#212121" : C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, cursor: "pointer", fontFamily: "Inter,sans-serif", fontWeight: gridBucketOnly ? 600 : 500, whiteSpace: "nowrap", flexShrink: 0 }}>
+            Grid bucket
           </button>
 
           <input value={jumpInput} onChange={e => setJumpInput(e.target.value)} onKeyDown={handleJump}
             placeholder="Go to #"
-            style={{ background: "#484848", border: "1px solid #606060", color: C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, outline: "none", fontFamily: "Inter,sans-serif", width: 80, textAlign: "center" }}
+            style={{ background: "#484848", border: "1px solid #606060", color: C.text, padding: "7px 12px", fontSize: 13, borderRadius: 20, outline: "none", fontFamily: "Inter,sans-serif", width: 80, textAlign: "center", flexShrink: 0 }}
           />
 
-          <div style={{ display: "flex", background: C.lift1, borderRadius: 20, padding: 2, gap: 2 }}>
+          <div style={{ display: "flex", background: C.lift1, borderRadius: 20, padding: 2, gap: 2, flexShrink: 0 }}>
             <button onClick={() => setBrowseMode(false)}
               style={{ background: !browseMode ? C.white : "transparent", border: "none", color: !browseMode ? "#212121" : C.muted, padding: "5px 14px", fontSize: 13, cursor: "pointer", borderRadius: 18, fontFamily: "Inter,sans-serif", fontWeight: !browseMode ? 600 : 400, transition: "all 0.15s" }}>
               Edit
@@ -673,7 +682,7 @@ export default function TagStudio() {
             </button>
           </div>
 
-          <span style={{ fontSize: 12, color: flash && !saving ? C.green : C.muted, opacity: saving || flash ? 1 : 0, transition: "opacity 0.3s", minWidth: 60, textAlign: "right", fontWeight: 500 }}>
+          <span style={{ fontSize: 12, color: flash && !saving ? C.green : C.muted, opacity: saving || flash ? 1 : 0, transition: "opacity 0.3s", minWidth: 60, textAlign: "right", fontWeight: 500, flexShrink: 0 }}>
             {saving ? "saving…" : "saved ✓"}
           </span>
         </div>
