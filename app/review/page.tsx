@@ -651,7 +651,7 @@ function SectionHead({ title }: { title: string }) {
 
 // ── Caption panel ─────────────────────────────────────────────────────────────
 // Self-contained: loads its own data per look (keyed on look id by the caller),
-// so it never touches the main form state or its Save.
+// so it never touches the main form state or its Save. Opens expanded by default.
 //
 // Edit target: look_enrichment.content where prompt_variant='reader_v2'.
 // Existing DB triggers on save: version captured in caption_versions,
@@ -721,7 +721,7 @@ function CaptionPanel({ lookId }: { lookId: string }) {
   const [row, setRow] = useState<{ id: string; content: string | null } | null>(null);
   const [draft, setDraft] = useState("");
   const [hidden, setHidden] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
