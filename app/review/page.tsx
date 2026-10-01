@@ -659,14 +659,61 @@ function SectionHead({ title }: { title: string }) {
 // content chunk re-embed. No paid regeneration. guard_reader_prose_complete
 // rejects a caption that doesn't end on a complete sentence.
 //
-// Citation markers ([[cite:web:N|Label]]) are shown raw. trg_sync_caption_citations
-// only rebuilds the citations array when the marker count matches what it can
-// build — so a changed marker count is warned before save.
+// Citation markers are shown as superscript source numbers (¹⁷) so the
+// caption reads cleanly. The stored markers vary in shape (most are
+// [[cite:web:N|Label]], some lack a label, a few are malformed), so each
+// marker's exact original text is kept and restored on save — untouched
+// markers round-trip byte-for-byte. Adjacent markers with no space between
+// them display as ²˒¹⁷ so the numbers don't run together.
 //
 // Hide: looks.caption_hidden. Stored now; the Lovable site does not read it yet.
 
-const countMarkers = (t: string) =>
-  new Set(Array.from(t.matchAll(/cite:web:(\d+)/g)).map(m => m[1])).size;
+const MARKER_RE = /\[\[cite:[^\]]*\]\]?/g;
+const SUP = ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"];
+const SUP_RUN_RE = /[⁰¹²³⁴⁵⁶⁷⁸⁹]+(?:˒[⁰¹²³⁴⁵⁶⁷⁸⁹]+)*/g;
+const toSup = (n: string) => n.split("").map(d => SUP[+d] ?? d).join("");
+const fromSup = (s: string) => s.split("").map(ch => String(SUP.indexOf(ch))).join("");
+const markerNum = (raw: string) => { const m = raw.match(/(\d+)(?!.*\d)/); return m ? m[1] : "?"; };
+const markerLabel = (raw: string) => { const m = raw.match(/\|([^\]]*)/); return m ? m[1].trim() : ""; };
+
+type Occ = { n: string; raw: string };
+
+function toDisplay(raw: string): { text: string; occs: Occ[] } {
+  const occs: Occ[] = [];
+  let out = "", last = 0, prevEnd = -1;
+  for (const m of raw.matchAll(MARKER_RE)) {
+    const start = m.index ?? 0;
+    const gap = raw.slice(last, start);
+    out += gap;
+    if (gap === "" && prevEnd === start) out += "˒";
+    const n = markerNum(m[0]);
+    out += toSup(n);
+    occs.push({ n, raw: m[0] });
+    last = start + m[0].length;
+    prevEnd = last;
+  }
+  return { text: out + raw.slice(last), occs };
+}
+
+function toRaw(display: string, occs: Occ[]): { raw: string; unknown: string[] } {
+  // Per-number queues: unchanged captions restore every marker exactly, in order.
+  const queues = new Map<string, string[]>();
+  occs.forEach(o => { if (!queues.has(o.n)) queues.set(o.n, []); queues.get(o.n)!.push(o.raw); });
+  const firstFor = new Map(occs.map(o => [o.n, o.raw] as const));
+  const unknown: string[] = [];
+  const raw = display.replace(SUP_RUN_RE, run =>
+    run.split("˒").map(tok => {
+      const n = fromSup(tok);
+      const q = queues.get(n);
+      if (q && q.length) return q.shift()!;
+      const fb = firstFor.get(n);
+      if (fb) return fb;
+      unknown.push(n);
+      return tok;
+    }).join("")
+  );
+  return { raw, unknown };
+}
 
 function CaptionPanel({ lookId }: { lookId: string }) {
   const [loading, setLoading] = useState(true);
@@ -678,6 +725,9 @@ function CaptionPanel({ lookId }: { lookId: string }) {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const original = row?.content || "";
+  const { text: originalDisplay, occs } = useMemo(() => toDisplay(original), [original]);
 
   useEffect(() => {
     let cancelled = false;
@@ -691,7 +741,7 @@ function CaptionPanel({ lookId }: { lookId: string }) {
         if (cancelled) return;
         const r = enr?.[0] || null;
         setRow(r);
-        setDraft(r?.content || "");
+        setDraft(toDisplay(r?.content || "").text);
         setHidden(!!lk?.[0]?.caption_hidden);
       } catch (e: any) {
         if (!cancelled) setLoadErr(String(e?.message || e));
@@ -702,28 +752,40 @@ function CaptionPanel({ lookId }: { lookId: string }) {
     return () => { cancelled = true; };
   }, [lookId]);
 
-  const original = row?.content || "";
-  const dirty = draft !== original;
-  const markersBefore = countMarkers(original);
-  const markersAfter = countMarkers(draft);
+  const dirty = draft !== originalDisplay;
+  const countTokens = (t: string) => (t.match(SUP_RUN_RE) || []).reduce((s, run) => s + run.split("˒").length, 0);
+  const markersBefore = occs.length;
+  const markersAfter = countTokens(draft);
   const markersChanged = dirty && markersBefore !== markersAfter;
+
+  // Source key: one entry per distinct number, label from its first marker.
+  const sourceKey = useMemo(() => {
+    const seen = new Map<string, string>();
+    occs.forEach(o => { if (!seen.has(o.n)) seen.set(o.n, markerLabel(o.raw)); });
+    return [...seen.entries()];
+  }, [occs]);
 
   const save = async () => {
     if (!row || !dirty || saving) return;
     if (!draft.trim()) { setMsg({ kind: "err", text: "Caption can't be empty — use Hide instead." }); return; }
+    const { raw, unknown } = toRaw(draft, occs);
+    if (unknown.length) {
+      setMsg({ kind: "err", text: `Not saved — no source ${[...new Set(unknown)].join(", ")} in this caption. Only reuse numbers already present.` });
+      return;
+    }
     if (markersChanged && !window.confirm(
-      `Citation markers changed (${markersBefore} → ${markersAfter}). The sources list won't rebuild automatically for this caption. Save anyway?`
+      `Citations changed (${markersBefore} → ${markersAfter}). The sources list may not rebuild automatically for this caption. Save anyway?`
     )) return;
     setSaving(true); setMsg(null);
     try {
       const res = await sb(`look_enrichment?id=eq.${row.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ content: draft }),
+        body: JSON.stringify({ content: raw }),
       });
-      const saved = res?.[0]?.content ?? draft;
+      const saved = res?.[0]?.content ?? raw;
       setRow({ ...row, content: saved });
-      setDraft(saved);
-      setMsg({ kind: "ok", text: markersChanged ? "Saved. Markers changed — sources need a manual rebuild." : "Saved." });
+      setDraft(toDisplay(saved).text);
+      setMsg({ kind: "ok", text: markersChanged ? "Saved. Citations changed — sources need a manual rebuild." : "Saved." });
     } catch (e: any) {
       const t = String(e?.message || e);
       setMsg({
@@ -763,7 +825,7 @@ function CaptionPanel({ lookId }: { lookId: string }) {
     padding: "4px 10px", fontSize: 11, cursor: "pointer", borderRadius: 12, fontFamily: "Inter,sans-serif",
   });
 
-  const preview = original.replace(/\[\[cite:web:\d+\|[^\]]*\]\]/g, "").replace(/\s+/g, " ").trim();
+  const preview = originalDisplay.replace(/\s+/g, " ").trim();
 
   return (
     <div style={{ border: `1px solid ${C.lift2}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -799,14 +861,24 @@ function CaptionPanel({ lookId }: { lookId: string }) {
         <>
           <textarea value={draft} onChange={e => { setDraft(e.target.value); setMsg(null); }}
             onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); } }}
-            rows={9}
-            style={{ width: "100%", boxSizing: "border-box", resize: "vertical", background: C.lift3, color: C.text, border: `1px solid ${C.lift2}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, lineHeight: 1.55, fontFamily: "Inter,sans-serif" }} />
+            rows={7}
+            style={{ width: "100%", boxSizing: "border-box", resize: "vertical", background: C.lift3, color: C.text, border: `1px solid ${C.lift2}`, borderRadius: 8, padding: "10px 12px", fontSize: 14, lineHeight: 1.6, fontFamily: "Inter,sans-serif" }} />
+          {sourceKey.length > 0 && (
+            <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>
+              {sourceKey.map(([n, label], i) => (
+                <span key={n}>
+                  {i > 0 && <span style={{ color: C.dim }}>{"  ·  "}</span>}
+                  <span style={{ color: C.text }}>{toSup(n)}</span> {label || <span style={{ color: C.dim }}>no label</span>}
+                </span>
+              ))}
+            </div>
+          )}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span style={{ fontSize: 11, color: markersChanged ? C.amber : C.dim }}>
-              {markersChanged ? `Citation markers ${markersBefore} → ${markersAfter}` : `${markersAfter} citation marker${markersAfter === 1 ? "" : "s"}`}
+              {markersChanged ? `Citations ${markersBefore} → ${markersAfter}` : `${markersAfter} citation${markersAfter === 1 ? "" : "s"}`}
             </span>
             <div style={{ flex: 1 }} />
-            {dirty && <button onClick={() => { setDraft(original); setMsg(null); }} disabled={saving} style={btn(false)}>Revert</button>}
+            {dirty && <button onClick={() => { setDraft(originalDisplay); setMsg(null); }} disabled={saving} style={btn(false)}>Revert</button>}
             <button onClick={save} disabled={!dirty || saving}
               style={{ background: dirty ? C.green : "transparent", border: dirty ? "none" : `1px solid ${C.lift2}`, color: dirty ? "#fff" : C.dim, padding: "4px 12px", fontSize: 11, cursor: dirty ? "pointer" : "default", borderRadius: 12, fontWeight: 600, fontFamily: "Inter,sans-serif" }}>
               {saving ? "Saving…" : "Save caption"}
