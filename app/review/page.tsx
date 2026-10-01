@@ -1,7 +1,7 @@
 // ── REVIEW PAGE → app/review/page.tsx ────────────────────────────────────────
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { sb, sbAll, H, SUPABASE_URL } from "@/lib/supabase";
 import { C, FONT_IMPORT } from "@/lib/theme";
 
@@ -645,6 +645,178 @@ function SectionHead({ title }: { title: string }) {
   return (
     <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, borderBottom: `1px solid ${C.lift2}`, paddingBottom: 6, marginBottom: 2, gridColumn: "1 / -1" }}>
       {title}
+    </div>
+  );
+}
+
+// ── Caption panel ─────────────────────────────────────────────────────────────
+// Self-contained: loads its own data per look (keyed on look id by the caller),
+// so it never touches the main form state or its Save.
+//
+// Edit target: look_enrichment.content where prompt_variant='reader_v2'.
+// Existing DB triggers on save: version captured in caption_versions,
+// looks.description_display + description_linked rebuilt, search tsv +
+// content chunk re-embed. No paid regeneration. guard_reader_prose_complete
+// rejects a caption that doesn't end on a complete sentence.
+//
+// Citation markers ([[cite:web:N|Label]]) are shown raw. trg_sync_caption_citations
+// only rebuilds the citations array when the marker count matches what it can
+// build — so a changed marker count is warned before save.
+//
+// Hide: looks.caption_hidden. Stored now; the Lovable site does not read it yet.
+
+const countMarkers = (t: string) =>
+  new Set(Array.from(t.matchAll(/cite:web:(\d+)/g)).map(m => m[1])).size;
+
+function CaptionPanel({ lookId }: { lookId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [row, setRow] = useState<{ id: string; content: string | null } | null>(null);
+  const [draft, setDraft] = useState("");
+  const [hidden, setHidden] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true); setLoadErr(null); setMsg(null);
+      try {
+        const [enr, lk] = await Promise.all([
+          sb(`look_enrichment?look_id=eq.${lookId}&prompt_variant=eq.reader_v2&select=id,content&limit=1`),
+          sb(`looks?id=eq.${lookId}&select=caption_hidden&limit=1`),
+        ]);
+        if (cancelled) return;
+        const r = enr?.[0] || null;
+        setRow(r);
+        setDraft(r?.content || "");
+        setHidden(!!lk?.[0]?.caption_hidden);
+      } catch (e: any) {
+        if (!cancelled) setLoadErr(String(e?.message || e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [lookId]);
+
+  const original = row?.content || "";
+  const dirty = draft !== original;
+  const markersBefore = countMarkers(original);
+  const markersAfter = countMarkers(draft);
+  const markersChanged = dirty && markersBefore !== markersAfter;
+
+  const save = async () => {
+    if (!row || !dirty || saving) return;
+    if (!draft.trim()) { setMsg({ kind: "err", text: "Caption can't be empty — use Hide instead." }); return; }
+    if (markersChanged && !window.confirm(
+      `Citation markers changed (${markersBefore} → ${markersAfter}). The sources list won't rebuild automatically for this caption. Save anyway?`
+    )) return;
+    setSaving(true); setMsg(null);
+    try {
+      const res = await sb(`look_enrichment?id=eq.${row.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ content: draft }),
+      });
+      const saved = res?.[0]?.content ?? draft;
+      setRow({ ...row, content: saved });
+      setDraft(saved);
+      setMsg({ kind: "ok", text: markersChanged ? "Saved. Markers changed — sources need a manual rebuild." : "Saved." });
+    } catch (e: any) {
+      const t = String(e?.message || e);
+      setMsg({
+        kind: "err",
+        text: t.includes("incomplete_prose")
+          ? "Not saved — caption must end on a complete sentence."
+          : `Not saved — ${t.slice(0, 300)}`,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleHidden = async () => {
+    if (toggling) return;
+    const next = !hidden;
+    setToggling(true); setMsg(null);
+    try {
+      await sb(`looks?id=eq.${lookId}`, {
+        method: "PATCH", prefer: "return=minimal",
+        body: JSON.stringify({ caption_hidden: next }),
+      });
+      setHidden(next);
+    } catch (e: any) {
+      setMsg({ kind: "err", text: `Hide not saved — ${String(e?.message || e).slice(0, 300)}` });
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  const pill = (label: string, color: string) => (
+    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color, border: `1px solid ${color}`, borderRadius: 10, padding: "1px 7px" }}>{label}</span>
+  );
+
+  const btn = (active: boolean): CSSProperties => ({
+    background: active ? C.lift2 : "transparent", border: `1px solid ${C.lift2}`, color: active ? C.text : C.muted,
+    padding: "4px 10px", fontSize: 11, cursor: "pointer", borderRadius: 12, fontFamily: "Inter,sans-serif",
+  });
+
+  const preview = original.replace(/\[\[cite:web:\d+\|[^\]]*\]\]/g, "").replace(/\s+/g, " ").trim();
+
+  return (
+    <div style={{ border: `1px solid ${C.lift2}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button onClick={() => setOpen(o => !o)}
+          style={{ background: "transparent", border: "none", color: C.muted, cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "Inter,sans-serif", display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ display: "inline-block", width: 10 }}>{open ? "▾" : "▸"}</span>Caption
+        </button>
+        {!loading && !loadErr && (row
+          ? (hidden ? pill("Hidden", C.amber) : pill("Live", C.green))
+          : pill("None", C.dim))}
+        {dirty && pill("Unsaved", C.amber)}
+        <div style={{ flex: 1 }} />
+        {row && (
+          <button onClick={toggleHidden} disabled={toggling} style={btn(hidden)}>
+            {toggling ? "…" : hidden ? "Unhide" : "Hide"}
+          </button>
+        )}
+      </div>
+
+      {loading && <div style={{ fontSize: 12, color: C.dim }}>Loading caption…</div>}
+      {loadErr && <div style={{ fontSize: 12, color: C.red }}>Couldn't load caption — {loadErr.slice(0, 200)}</div>}
+      {!loading && !loadErr && !row && <div style={{ fontSize: 12, color: C.dim }}>No caption for this look yet.</div>}
+
+      {!loading && !loadErr && row && !open && (
+        <div onClick={() => setOpen(true)}
+          style={{ fontSize: 12, color: hidden ? C.dim : C.muted, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {preview || "—"}
+        </div>
+      )}
+
+      {!loading && !loadErr && row && open && (
+        <>
+          <textarea value={draft} onChange={e => { setDraft(e.target.value); setMsg(null); }}
+            onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); } }}
+            rows={9}
+            style={{ width: "100%", boxSizing: "border-box", resize: "vertical", background: C.lift3, color: C.text, border: `1px solid ${C.lift2}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, lineHeight: 1.55, fontFamily: "Inter,sans-serif" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: markersChanged ? C.amber : C.dim }}>
+              {markersChanged ? `Citation markers ${markersBefore} → ${markersAfter}` : `${markersAfter} citation marker${markersAfter === 1 ? "" : "s"}`}
+            </span>
+            <div style={{ flex: 1 }} />
+            {dirty && <button onClick={() => { setDraft(original); setMsg(null); }} disabled={saving} style={btn(false)}>Revert</button>}
+            <button onClick={save} disabled={!dirty || saving}
+              style={{ background: dirty ? C.green : "transparent", border: dirty ? "none" : `1px solid ${C.lift2}`, color: dirty ? "#fff" : C.dim, padding: "4px 12px", fontSize: 11, cursor: dirty ? "pointer" : "default", borderRadius: 12, fontWeight: 600, fontFamily: "Inter,sans-serif" }}>
+              {saving ? "Saving…" : "Save caption"}
+            </button>
+          </div>
+          {hidden && <div style={{ fontSize: 11, color: C.dim }}>Hidden is stored but not yet enforced on the live site.</div>}
+        </>
+      )}
+
+      {msg && <div style={{ fontSize: 12, color: msg.kind === "ok" ? C.green : C.red }}>{msg.text}</div>}
     </div>
   );
 }
@@ -1493,6 +1665,8 @@ export default function ReviewQueue() {
                 <div style={{ fontSize: 12, color: C.muted }}>
                   Ingested {new Date(selected.created_at).toLocaleDateString()} · {selected.credit_count} credits · {selected.tag_count} tags
                 </div>
+
+                <CaptionPanel key={selected.id} lookId={selected.id} />
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
 
