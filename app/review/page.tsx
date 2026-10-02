@@ -1080,9 +1080,14 @@ export default function ReviewQueue() {
       // Background refresh: keep pointing at the same selected look, but
       // with the newly-loaded fields (status, brands_display, counts).
       // If the look was deleted between renders, selection is cleared.
-      if (isBg && selected) {
-        const fresh = mapped.find((l: any) => l.id === selected.id);
-        setSelected(fresh || null);
+      // Use the functional updater so this reads the selection at the moment
+      // the reload finishes — NOT the `selected` captured when the save began.
+      // The captured value snapped the panel back to the previously-saved look
+      // while the edit fields held the newly-clicked look's values, so the next
+      // Save wrote one look's fields (cloudinary_url, notes, source_url, …)
+      // onto another.
+      if (isBg) {
+        setSelected(prev => (prev ? mapped.find((l: any) => l.id === prev.id) ?? null : null));
       }
     } catch(e: any) { console.error(e); setLoadError(e?.message || "Failed to load looks."); }
     if (!isBg) setLoading(false);
